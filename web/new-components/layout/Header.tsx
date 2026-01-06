@@ -28,16 +28,25 @@ const Header: React.FC = () => {
   }
 
   return (
-    <header className='flex items-center justify-end fixed top-0 right-0 h-14 pr-11 bg-transparent'>
-      <a href='https://github.com/sxm1129/DB-GPT' target='_blank' className='flex items-center h-full mr-4' rel='noreferrer'>
-        <Tooltip title={t('docs')}>
-          <ReadOutlined />
-        </Tooltip>
-      </a>
+    <header className='flex items-center justify-end fixed top-4 right-4 h-14 pr-4 z-50'>
+      <div className='flex items-center gap-3 glass-light dark:glass-dark px-4 py-2 rounded-xl border border-theme-border dark:border-white/10 shadow-sm'>
+        <a
+          href='https://github.com/sxm1129/DB-GPT'
+          target='_blank'
+          className='flex items-center h-full transition-smooth hover:text-theme-primary dark:hover:text-theme-secondary'
+          rel='noreferrer'
+        >
+          <Tooltip title={t('docs')}>
+            <ReadOutlined className='text-lg' />
+          </Tooltip>
+        </a>
 
-      <Tooltip>
-        <span className='text-sm'>帮助中心</span>
-      </Tooltip>
+        <Tooltip title='帮助中心'>
+          <span className='text-sm cursor-pointer transition-smooth hover:text-theme-primary dark:hover:text-theme-secondary'>
+            帮助中心
+          </span>
+        </Tooltip>
+      </div>
       {/* <UserBar /> */}
     </header>
   );

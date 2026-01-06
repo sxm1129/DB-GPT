@@ -236,7 +236,7 @@ const Playground: NextPage = () => {
             }
           }}
           LeftBottom={
-            <div className='flex gap-8 items-center text-[#878c93] text-sm dark:text-stone-200'>
+            <div className='flex gap-8 items-center text-theme-text/60 dark:text-white/60 text-sm'>
               {item.owner_name && (
                 <div className='flex gap-1 items-center'>
                   <Avatar
@@ -281,7 +281,7 @@ const Playground: NextPage = () => {
 
   return (
     <div
-      className='flex flex-col h-full w-full backdrop-filter backdrop-blur dark:bg-gradient-dark bg-gradient-light  p-10 pt-12 '
+      className='flex flex-col h-full w-full p-10 pt-12 gradient-mesh transition-glass'
       id='home-container'
     >
       <ConfigProvider
@@ -307,7 +307,12 @@ const Playground: NextPage = () => {
           <div className='flex justify-between items-center'>
             <div className='flex items-center gap-4'>
               <Segmented
-                className='h-10 backdrop-filter backdrop-blur-lg bg-white bg-opacity-30 border border-white rounded-lg shadow p-1 dark:border-[#6f7f95] dark:bg-[#6f7f95] dark:bg-opacity-60'
+                className={cls(
+                  'h-10 transition-smooth',
+                  'glass-light dark:glass-dark',
+                  'border border-theme-border dark:border-white/10',
+                  'rounded-xl shadow-sm',
+                )}
                 options={items}
                 onChange={key => setActiveKey(key as any)}
                 value={activeKey}
@@ -320,7 +325,10 @@ const Playground: NextPage = () => {
                 onPressEnter={onSearch}
                 allowClear
                 className={cls(
-                  'w-[230px] h-[40px] border-1 border-white backdrop-filter backdrop-blur-lg bg-white bg-opacity-30 dark:border-[#6f7f95] dark:bg-[#6f7f95] dark:bg-opacity-60',
+                  'w-[230px] h-[40px] transition-smooth',
+                  'glass-light dark:glass-dark',
+                  'border border-theme-border dark:border-white/10',
+                  'rounded-xl shadow-sm hover:shadow-md',
                   {
                     hidden: activeKey === 'recommend',
                   },
@@ -330,7 +338,8 @@ const Playground: NextPage = () => {
 
             <div className='flex items-center gap-4'>
               <Button
-                className='border-none text-white bg-button-gradient'
+                type='primary'
+                className='transition-smooth shadow-sm hover:shadow-md'
                 icon={<PlusOutlined />}
                 onClick={() => {
                   localStorage.removeItem('new_app_info');

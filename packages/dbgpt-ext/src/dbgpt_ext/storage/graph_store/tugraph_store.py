@@ -214,17 +214,24 @@ class TuGraphStore(GraphStoreBase):
                     from dbgpt_tugraph_plugins import (  # type: ignore
                         get_plugin_binary_path,
                     )
+                    
+                    plugin_path = get_plugin_binary_path(name)  # type ignore
+                    with open(plugin_path, "rb") as f:
+                        content = f.read()
+                    content = base64.b64encode(content).decode()
+                    gql = (
+                        f"CALL db.plugin.loadPlugin('CPP', '{name}', '{content}', 'SO', "
+                        f"'{name} Plugin', false, 'v1')"
+                    )
+                    self.conn.run(gql)
+                    logger.info(f"Successfully uploaded plugin: {name}")
                 except ImportError:
                     logger.error(
+                        f"Failed to upload plugin '{name}': "
                         "dbgpt-tugraph-plugins is not installed, "
                         "pip install dbgpt-tugraph-plugins==0.1.1"
                     )
-                plugin_path = get_plugin_binary_path("leiden")  # type: ignore
-                with open(plugin_path, "rb") as f:
-                    content = f.read()
-                content = base64.b64encode(content).decode()
-                gql = (
-                    f"CALL db.plugin.loadPlugin('CPP', '{name}', '{content}', 'SO', "
-                    f"'{name} Plugin', false, 'v1')"
-                )
-                self.conn.run(gql)
+                    continue
+                except Exception as e:
+                    logger.error(f"Failed to upload plugin '{name}': {str(e)}")
+                    continue

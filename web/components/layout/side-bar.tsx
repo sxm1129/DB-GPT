@@ -42,8 +42,10 @@ type RouteItem = {
 // }
 
 function smallMenuItemStyle(active?: boolean) {
-  return `flex items-center justify-center mx-auto rounded w-14 h-14 text-xl hover:bg-[#F1F5F9] dark:hover:bg-theme-dark transition-colors cursor-pointer ${
-    active ? 'bg-[#F1F5F9] dark:bg-theme-dark' : ''
+  return `flex items-center justify-center mx-auto rounded-xl w-14 h-14 text-xl transition-glass cursor-pointer ${
+    active
+      ? 'bg-theme-primary/10 dark:bg-theme-primary/20 text-theme-primary dark:text-theme-secondary shadow-glass-sm'
+      : 'hover:bg-theme-primary/5 dark:hover:bg-white/5 hover:scale-105'
   }`;
 }
 
@@ -430,7 +432,7 @@ function SideBar() {
   if (!isMenuExpand) {
     return (
       <div
-        className='flex flex-col justify-between pt-4 h-screen bg-bar dark:bg-[#232734] animate-fade animate-duration-300'
+        className='flex flex-col justify-between pt-4 h-screen glass-nav border-r border-theme-border dark:border-white/10 transition-glass animate-fade animate-duration-300'
         // onMouseEnter={() => {
         // setIsMenuExpand(true);
         // }}
@@ -465,7 +467,7 @@ function SideBar() {
 
   return (
     <div
-      className='flex flex-col justify-between h-screen px-4 pt-4 bg-bar dark:bg-[#232734] animate-fade animate-duration-300'
+      className='flex flex-col justify-between h-screen px-4 pt-4 glass-nav border-r border-theme-border dark:border-white/10 transition-glass animate-fade animate-duration-300'
       // onMouseLeave={() => {
       //   setIsMenuExpand(false);
       // }}
@@ -482,9 +484,10 @@ function SideBar() {
               <Link
                 href={item.path}
                 className={cls(
-                  'flex items-center w-full h-12 px-4 cursor-pointer hover:bg-[#F1F5F9] dark:hover:bg-theme-dark hover:rounded-xl',
+                  'flex items-center w-full h-12 px-4 cursor-pointer transition-glass rounded-xl group',
                   {
-                    'bg-white rounded-xl dark:bg-black': item.isActive,
+                    'bg-theme-primary/10 dark:bg-theme-primary/20 text-theme-primary dark:text-theme-secondary font-medium shadow-glass-sm': item.isActive,
+                    'hover:bg-theme-primary/5 dark:hover:bg-white/5 hover:translate-x-1': !item.isActive,
                   },
                 )}
                 key={item.key}
@@ -499,12 +502,12 @@ function SideBar() {
 
       {/* Settings */}
       <div className='pt-4'>
-        <span className={cls('flex items-center w-full h-12 px-4 bg-[#F1F5F9] dark:bg-theme-dark rounded-xl')}>
+        <span className={cls('flex items-center w-full h-12 px-4 glass-light dark:glass-dark rounded-xl')}>
           <div className='mr-3 w-full'>
             <UserBar />
           </div>
         </span>
-        <div className='flex items-center justify-around py-4 mt-2 border-t border-dashed border-gray-200 dark:border-gray-700'>
+        <div className='flex items-center justify-around py-4 mt-2 border-t border-dashed border-theme-border dark:border-white/10'>
           {settings.map(item => (
             <div key={item.key}>
               <Popover content={item.name}>

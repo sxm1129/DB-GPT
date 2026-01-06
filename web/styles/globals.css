@@ -4,18 +4,45 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ========================================
+   1. 全局基础样式与字体配置
+   ======================================== */
 body {
   margin: 0;
-  font-family: var(--joy-fontFamily-body, var(--joy-Josefin Sans, sans-serif));
+  font-family: 'Open Sans', var(--joy-fontFamily-body, sans-serif);
   line-height: var(--joy-lineHeight-md, 1.5);
-  --antd-primary-color: #0069fe;
+  
+  /* SaaS 专业配色方案 */
+  --antd-primary-color: #2563EB;
+  --antd-secondary-color: #3B82F6;
+  --antd-cta-color: #F97316;
+  --antd-text-color: #1E293B;
+  --antd-border-color: #E2E8F0;
+  --antd-bg-color: #F8FAFC;
+  
+  /* Glassmorphism 设计令牌 */
+  --glass-bg-light: rgba(255, 255, 255, 0.85);
+  --glass-bg-dark: rgba(35, 39, 52, 0.75);
+  --glass-blur: 16px;
+  --glass-border-light: rgba(226, 232, 240, 0.5);
+  --glass-border-dark: rgba(255, 255, 255, 0.1);
+  
   -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
   -webkit-appearance: none;
 }
 
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Poppins', sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* ========================================
+   2. 主题颜色系统
+   ======================================== */
 .light {
-  color: #333;
-  background-color: #f7f7f7;
+  color: #1E293B;
+  background-color: #F8FAFC;
 }
 
 .dark {
@@ -27,14 +54,22 @@ body {
   background-color: rgb(35, 38, 44);
 }
 
+/* ========================================
+   3. Ant Design 组件样式覆盖
+   ======================================== */
 .ant-btn-primary {
   background-color: var(--antd-primary-color);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.2);
+  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
-.ant-pagination .ant-pagination-prev * {
-  color: var(--antd-primary-color) !important;
+.ant-btn-primary:hover {
+  background-color: #1D4ED8;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+  transform: translateY(-1px);
 }
 
+.ant-pagination .ant-pagination-prev *,
 .ant-pagination .ant-pagination-next * {
   color: var(--antd-primary-color) !important;
 }
@@ -51,12 +86,14 @@ body {
   color: white !important;
 }
 
+/* ========================================
+   4. 滚动条样式
+   ======================================== */
 .scrollbar-default::-webkit-scrollbar {
   display: block;
   width: 6px;
 }
 
-/* 自定义滚动条样式 */
 ::-webkit-scrollbar {
   display: none;
 }
@@ -67,14 +104,16 @@ body {
 
 ::-webkit-scrollbar-thumb {
   background: #888;
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: #555;
 }
 
-
-
+/* ========================================
+   5. Ant Design 特殊组件样式
+   ======================================== */
 .dark :where(.css-dev-only-do-not-override-18iikkb).ant-tabs .ant-tabs-tab-btn {
   color: white;
 }
@@ -83,16 +122,45 @@ body {
   height: 36px;
 }
 
+/* ========================================
+   6. 基础动画关键帧
+   ======================================== */
 @keyframes rotate {
   to {
     transform: rotate(360deg);
   }
 }
 
+@keyframes floatUp {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+/* ========================================
+   7. React Flow 样式
+   ======================================== */
 .react-flow__panel {
   display: none !important;
 }
 
+/* ========================================
+   8. 页面级组件样式
+   ======================================== */
 #home-container .ant-tabs-tab-active {
   font-size: 16px;
 }
@@ -112,7 +180,9 @@ pre {
   padding-left: 0.5rem;
 }
 
-/* Floating buttons z-index system */
+/* ========================================
+   9. 浮动按钮 z-index 系统
+   ======================================== */
 .z-float-helper {
   z-index: 997;
 }
@@ -125,7 +195,9 @@ pre {
   z-index: 999;
 }
 
-/* Responsive floating button layout */
+/* ========================================
+   10. 响应式浮动按钮布局
+   ======================================== */
 @media (max-width: 768px) {
   .float-button-container {
     right: 1rem !important;
@@ -150,16 +222,217 @@ pre {
   }
 }
 
+/* ========================================
+   11. 表格样式
+   ======================================== */
 table {
   display: block;
   width: 100%;
   table-layout: fixed;
 }
 
+/* ========================================
+   12. Markdown 编辑器样式
+   ======================================== */
 .rc-md-editor {
   height: inherit;
 }
 
 .rc-md-editor .editor-container>.section {
   border-right: none !important;
+}
+
+/* ========================================
+   13. Glassmorphism 效果库
+   ======================================== */
+
+/* 基础毛玻璃效果 */
+.glass {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* 亮色主题增强毛玻璃 */
+.glass-light {
+  background: var(--glass-bg-light);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border-light);
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.08);
+}
+
+/* 暗色主题增强毛玻璃 */
+.glass-dark {
+  background: var(--glass-bg-dark);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-border-dark));
+  border: 1px solid var(--glass-border-dark);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+/* 卡片毛玻璃效果 */
+.glass-card {
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(226, 232, 240, 0.6);
+  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.12);
+}
+
+.dark .glass-card {
+  background: rgba(35, 39, 52, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+/* 导航栏毛玻璃 */
+.glass-nav {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.dark .glass-nav {
+  background: rgba(35, 39, 52, 0.88);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* ========================================
+   14. 渐变背景系统
+   ======================================== */
+.gradient-primary {
+  background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
+}
+
+.gradient-secondary {
+  background: linear-gradient(135deg, #00DAEF 0%, #105EFF 100%);
+}
+
+.gradient-mesh {
+  background: 
+    radial-gradient(at 27% 37%, hsla(215, 98%, 61%, 0.15) 0px, transparent 50%),
+    radial-gradient(at 97% 21%, hsla(204, 100%, 47%, 0.15) 0px, transparent 50%),
+    radial-gradient(at 52% 99%, hsla(204, 100%, 70%, 0.15) 0px, transparent 50%),
+    radial-gradient(at 10% 29%, hsla(215, 100%, 56%, 0.15) 0px, transparent 50%);
+}
+
+.dark .gradient-mesh {
+  background: 
+    radial-gradient(at 27% 37%, hsla(215, 98%, 61%, 0.08) 0px, transparent 50%),
+    radial-gradient(at 97% 21%, hsla(204, 100%, 47%, 0.08) 0px, transparent 50%),
+    radial-gradient(at 52% 99%, hsla(204, 100%, 70%, 0.08) 0px, transparent 50%),
+    radial-gradient(at 10% 29%, hsla(215, 100%, 56%, 0.08) 0px, transparent 50%);
+}
+
+/* ========================================
+   15. 平滑过渡动画
+   ======================================== */
+.transition-smooth {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.transition-fast {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.transition-glass {
+  transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* ========================================
+   16. 无障碍与运动偏好
+   ======================================== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ========================================
+   17. 焦点状态(可访问性)
+   ======================================== */
+.focus-ring {
+  outline: 2px solid #2563EB;
+  outline-offset: 2px;
+}
+
+*:focus-visible {
+  outline: 2px solid #2563EB;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ========================================
+   18. 卡片悬停效果
+   ======================================== */
+.card-hover {
+  transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94), 
+              box-shadow 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.card-hover:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 20px 40px rgba(37, 99, 235, 0.15);
+}
+
+/* ========================================
+   19. 按钮增强效果
+   ======================================== */
+.btn-glass {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: all 0.3s ease;
+}
+
+.btn-glass:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(37, 99, 235, 0.2);
+}
+
+/* ========================================
+   20. 文本渐变效果
+   ======================================== */
+.text-gradient {
+  background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ========================================
+   21. 加载动画
+   ======================================== */
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.2) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+/* ========================================
+   22. 微交互效果
+   ======================================== */
+.scale-hover {
+  transition: transform 0.2s ease;
+}
+
+.scale-hover:hover {
+  transform: scale(1.05);
+}
+
+.scale-press:active {
+  transform: scale(0.98);
 }

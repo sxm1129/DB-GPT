@@ -41,6 +41,12 @@ class MyDocument extends Document {
           <meta name='description' content='xSmartKG - 智能知识图谱平台' />
           <meta property='og:description' content='xSmartKG - Smart Knowledge Graph Platform' />
           <meta property='og:title' content='xSmartKG' />
+          <link rel='preconnect' href='https://fonts.googleapis.com' />
+          <link rel='preconnect' href='https://fonts.gstatic.com' crossOrigin='anonymous' />
+          <link
+            href='https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap'
+            rel='stylesheet'
+          />
         </Head>
         <body>
           <Main />
