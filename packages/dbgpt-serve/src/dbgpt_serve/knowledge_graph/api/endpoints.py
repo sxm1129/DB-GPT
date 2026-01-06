@@ -67,7 +67,7 @@ async def get_task_detail(
 
 @router.get("/tasks", response_model=KGUploadTaskListResponse)
 async def list_tasks(
-    user_id: str,
+    user_id: Optional[str] = Query(None, description="User ID"),
     page: int = 1,
     limit: int = 20,
     status: Optional[str] = Query(None, description="Task status filter"),

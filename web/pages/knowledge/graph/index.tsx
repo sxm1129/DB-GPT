@@ -184,7 +184,13 @@ function GraphVis() {
 
   return (
     <>
-      <Graphin data={data} {...config}>
+      <Graphin 
+        options={options} 
+        onReady={({ graph }) => {
+          graphRef.current = graph;
+          setIsReady(true);
+        }}
+      >
         <div style={{ position: 'absolute', top: 16, left: 16, zIndex: 10, display: 'flex', gap: 8 }}>
           <Button style={{ background: '#fff' }} onClick={back} icon={<RollbackOutlined />}>
             Back

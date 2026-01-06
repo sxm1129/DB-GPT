@@ -53,9 +53,10 @@ const GraphPreview: React.FC<{ spaceName: string; refreshTrigger?: number }> = (
       try {
         const [_, res] = await apiInterceptors(getGraphVis(spaceName, { limit: 50 }));
         if (res) {
-          const nodes = res.nodes.map((n: any) => ({ id: n.id, data: n, style: { label: { value: n.name, fontSize: 8 } } }));
-          const edges = res.edges.map((e: any) => ({ source: e.source, target: e.target, data: e }));
-          setData({ nodes, edges });
+          setData({
+            nodes: res.nodes.map((n: any) => ({ id: n.id, data: n })),
+            edges: res.edges.map((e: any) => ({ source: e.source, target: e.target, data: e }))
+          });
         }
       } catch (e) {
         console.error(e);
@@ -70,9 +71,33 @@ const GraphPreview: React.FC<{ spaceName: string; refreshTrigger?: number }> = (
   if (loading) return <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Spin /></div>;
   if (!data || data.nodes.length === 0) return <Empty description="该空间尚无数据" image={Empty.PRESENTED_IMAGE_SIMPLE} />;
 
+  const options = {
+    data,
+    layout: { type: 'force', preventOverlap: true },
+    autoFit: 'center',
+    node: {
+      style: (d: any) => ({
+        labelText: d.data.name,
+        labelFontSize: 10,
+        size: 20,
+        fill: '#1e88e5',
+        labelBackground: true,
+        labelBackgroundFill: '#fff',
+      })
+    },
+    edge: {
+      style: {
+        endArrow: true,
+        lineWidth: 1,
+        stroke: '#e2e2e2'
+      }
+    },
+    behaviors: ['drag-canvas', 'zoom-canvas', 'drag-element']
+  };
+
   return (
     <div style={{ height: 300, background: '#fcfcfc', borderRadius: 8, border: '1px solid #f0f0f0', overflow: 'hidden' }}>
-      <Graphin data={data} layout={{ type: 'force' }} />
+      <Graphin options={options} />
     </div>
   );
 };
@@ -241,7 +266,7 @@ const KGUploadPage: React.FC = () => {
     }
 
     try {
-      const [err, res] = await uploadKGFiles(formData);
+      const [err, res] = await apiInterceptors(uploadKGFiles(formData));
       if (err) {
         message.error('上传失败');
         setUploading(false);

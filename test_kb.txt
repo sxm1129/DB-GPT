@@ -1,0 +1,3 @@
+Test content for knowledge graph upload.
+This is a dummy file to verify the upload functionality.
+It contains simple entities like Apple, Google, and Microsoft.

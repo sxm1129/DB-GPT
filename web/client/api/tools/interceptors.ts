@@ -19,6 +19,11 @@ export const apiInterceptors = <T = any, D = any>(
       if (!data) {
         throw new Error('Network Error!');
       }
+      // Compatible with V2 API which may return data directly without success field
+      if (data.success === undefined && (data.task_id || data.spaces || data.tasks || Array.isArray(data))) {
+          return [null, data, data, response];
+      }
+
       if (!data.success) {
         if (ignoreCodes === '*' || (data.err_code && ignoreCodes && ignoreCodes.includes(data.err_code))) {
           return [null, data.data, data, response];
