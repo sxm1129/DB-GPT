@@ -53,7 +53,7 @@ function SideBar() {
   const { isMenuExpand, setIsMenuExpand, mode, setMode, adminList } = useContext(ChatContext);
   const { pathname } = useRouter();
   const { t, i18n } = useTranslation();
-  const [logo, setLogo] = useState<string>('/logo_zh_latest.png');
+  const [logo, setLogo] = useState<string>('/xsmartkg_logo.png');
 
   const hasAdmin = useMemo(() => {
     const { user_id } = JSON.parse(localStorage.getItem(STORAGE_USERINFO_KEY) || '{}');
@@ -424,7 +424,7 @@ function SideBar() {
   }, [i18n.language]);
 
   useEffect(() => {
-    setLogo(mode === 'dark' ? '/logo_s_latest.png' : '/logo_zh_latest.png');
+    setLogo('/xsmartkg_logo.png');
   }, [mode]);
 
   if (!isMenuExpand) {
@@ -437,7 +437,7 @@ function SideBar() {
       >
         <div>
           <Link href='/' className='flex justify-center items-center pb-4'>
-            <Image src={isMenuExpand ? logo : '/LOGO_SMALL.png'} alt='DB-GPT' width={40} height={40} />
+            <Image src={isMenuExpand ? logo : '/xsmartkg_icon.png'} alt='xSmartKG' width={40} height={40} />
           </Link>
           <div className='flex flex-col gap-4 items-center'>
             {functions.map(i => (
@@ -473,7 +473,7 @@ function SideBar() {
       <div>
         {/* LOGO */}
         <Link href='/' className='flex items-center justify-center p-2 pb-4'>
-          <Image src={isMenuExpand ? logo : '/LOGO_SMALL.png'} alt='DB-GPT' width={180} height={40} />
+          <Image src={isMenuExpand ? logo : '/xsmartkg_icon.png'} alt='xSmartKG' width={180} height={40} />
         </Link>
         {/* functions */}
         <div className='flex flex-col gap-4'>

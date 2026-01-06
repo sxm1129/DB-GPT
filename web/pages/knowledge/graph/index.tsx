@@ -9,6 +9,8 @@ import { useRouter } from 'next/router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { GraphVisResult } from '../../../types/knowledge';
 import { getDegree, getSize, isInCommunity } from '../../../utils/graph';
+import KGUploadModal from '@/components/knowledge/KGUploadModal';
+import { PlusOutlined } from '@ant-design/icons';
 
 type GraphVisData = GraphVisResult | null;
 
@@ -20,6 +22,7 @@ function GraphVis() {
   const [data, setData] = useState<GraphVisData>(null);
   const graphRef = useRef<Graph | null>();
   const [isReady, setIsReady] = useState(false);
+  const [isUploadModalVisible, setIsUploadModalVisible] = useState(false);
 
   const fetchGraphVis = async () => {
     const [_, data] = await apiInterceptors(getGraphVis(spaceName as string, { limit: LIMIT }));
@@ -180,21 +183,29 @@ function GraphVis() {
   if (!data) return <Spin className='h-full justify-center content-center' />;
 
   return (
-    <div className='p-4 h-full overflow-y-scroll relative px-2'>
-      <Graphin
-        ref={ref => {
-          graphRef.current = ref;
-        }}
-        style={{ height: '100%', width: '100%' }}
-        options={options}
-        onReady={() => {
-          setIsReady(true);
-        }}
       >
-        <Button style={{ background: '#fff' }} onClick={back} icon={<RollbackOutlined />}>
-          Back
-        </Button>
+        <div style={{ position: 'absolute', top: 16, left: 16, zIndex: 10, display: 'flex', gap: 8 }}>
+          <Button style={{ background: '#fff' }} onClick={back} icon={<RollbackOutlined />}>
+            Back
+          </Button>
+          <Button 
+            type="primary" 
+            icon={<PlusOutlined />} 
+            onClick={() => setIsUploadModalVisible(true)}
+          >
+            Build KG
+          </Button>
+        </div>
       </Graphin>
+      <KGUploadModal 
+        visible={isUploadModalVisible} 
+        onCancel={() => setIsUploadModalVisible(false)} 
+        onSuccess={() => {
+          setIsUploadModalVisible(false);
+          fetchGraphVis();
+        }}
+        spaceName={spaceName as string}
+      />
     </div>
   );
 }

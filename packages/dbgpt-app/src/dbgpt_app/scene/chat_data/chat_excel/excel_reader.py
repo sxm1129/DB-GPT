@@ -385,8 +385,8 @@ AND dc.schema_name = 'main';
             new_column_name = col_transform["new_column_name"]
             new_column_type = old_col_name_to_type[old_column_name]
             old_column_name = f'"{old_column_name}"'  # 使用双引号括起列名
-            select_sql_list.append(f"{old_column_name} AS {new_column_name}")
-            create_columns.append(f"{new_column_name} {new_column_type}")
+            select_sql_list.append(f'{old_column_name} AS "{new_column_name}"')
+            create_columns.append(f'"{new_column_name}" {new_column_type}')
 
         select_sql = ", ".join(select_sql_list)
         create_columns_str = ", ".join(create_columns)
@@ -423,7 +423,7 @@ AND dc.schema_name = 'main';
                 # two single quotes
                 escaped_description = column_description.replace("'", "''")
                 column_comment_sql = (
-                    f"COMMENT ON COLUMN {new_table}.{new_column_name}"
+                    f'COMMENT ON COLUMN {new_table}."{new_column_name}"'
                     f" IS '{escaped_description}';"
                 )
                 self.db.sql(column_comment_sql)

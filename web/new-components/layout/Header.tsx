@@ -29,7 +29,7 @@ const Header: React.FC = () => {
 
   return (
     <header className='flex items-center justify-end fixed top-0 right-0 h-14 pr-11 bg-transparent'>
-      <a href='htt://docs.dbgpt.cn' target='_blank' className='flex items-center h-full mr-4' rel='noreferrer'>
+      <a href='https://github.com/sxm1129/DB-GPT' target='_blank' className='flex items-center h-full mr-4' rel='noreferrer'>
         <Tooltip title={t('docs')}>
           <ReadOutlined />
         </Tooltip>

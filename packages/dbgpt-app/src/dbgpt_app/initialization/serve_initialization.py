@@ -29,6 +29,7 @@ def scan_serve_configs():
         "dbgpt_serve.model",
         "dbgpt_serve.prompt",
         "dbgpt_serve.rag",
+        "dbgpt_serve.knowledge_graph",
     ]
 
     scanner = ModelScanner[BaseServeConfig]()
@@ -306,3 +307,20 @@ def register_serve_apps(
             api_keys=global_api_keys,
         ),
     )
+
+    # ################################ Model Serve Register End #######################
+
+    # ################################ Knowledge Graph Serve Register Begin ############
+    from dbgpt_serve.knowledge_graph.serve import Serve as KGServe
+
+    # Register serve KG
+    system_app.register(
+        KGServe,
+        config=get_config(
+            serve_configs,
+            KGServe.name,
+            dbgpt_serve.knowledge_graph.serve.ServeConfig,
+            api_keys=global_api_keys,
+        ),
+    )
+    # ################################ Knowledge Graph Serve Register End ##############

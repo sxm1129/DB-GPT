@@ -59,3 +59,52 @@ export const searchChunk = (data: { document_id: string; content: string }, name
 export const chunkAddQuestion = (data: { chunk_id: string; questions: string[] }) => {
   return POST<{ chunk_id: string; questions: string[] }, string[]>(`/knowledge/questions/chunk/edit`, data);
 };
+
+/**
+ * 知识图谱相关接口 (Serve V2)
+ */
+
+interface KGTaskRequest {
+  user_id?: string;
+  graph_space_name: string;
+  excel_mode?: string;
+  custom_prompt?: string;
+}
+
+export interface KGTaskResponse {
+  task_id: string;
+  graph_space_name: string;
+  status: string;
+  progress: number;
+  current_file?: string;
+  total_files: number;
+  entities_count: number;
+  relations_count: number;
+  file_names: any[];
+  gmt_created: string;
+  completed_at?: string;
+  error_message?: string;
+}
+
+// 上传知识图谱文件请求
+export const uploadKGFiles = (formData: FormData) => {
+  return POST<FormData, KGTaskResponse>('/serve/knowledge_graph/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 300000, // 5分钟超时
+  });
+};
+
+// 获取任务列表
+export const getKGTasks = (params: { user_id?: string; page?: number; page_size?: number }) => {
+  return GET<any, { tasks: KGTaskResponse[]; total: number; page: number }>('/serve/knowledge_graph/tasks', params);
+};
+
+// 获取任务详情
+export const getKGTaskDetail = (taskId: string) => {
+  return GET<any, KGTaskResponse>(`/serve/knowledge_graph/tasks/${taskId}`);
+};
+
+// 取消任务
+export const cancelKGTask = (taskId: string) => {
+  return POST<any, any>(`/serve/knowledge_graph/tasks/${taskId}/cancel`);
+};

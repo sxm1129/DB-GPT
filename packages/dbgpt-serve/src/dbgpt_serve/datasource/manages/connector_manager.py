@@ -195,7 +195,7 @@ class ConnectorManager(BaseComponent):
             user = db_config.get("db_user")
             pwd = db_config.get("db_pwd")
             extConfig = db_config.get("ext_config")
-            dbJson = json.loads(extConfig)
+            dbJson = json.loads(extConfig) if extConfig else {}
             service_name = dbJson.get("service_name", None)
             sid = (dbJson.get("sid", None),)
             return connect_instance.from_uri_db(  # type: ignore
@@ -209,12 +209,21 @@ class ConnectorManager(BaseComponent):
 
             try:
                 ext_config = db_config.get("ext_config")
-                db_json = json.loads(ext_config)
+                db_json = (
+                    json.loads(ext_config) if ext_config else {}
+                )
                 schema = db_json.get("schema", None)
-            except json.JSONDecodeError:
-                # 处理解码失败的情况
+            except Exception:
                 db_json = {}
                 schema = None
+            if db_type.value() == "tugraph":
+                return connect_instance.from_uri_db(  # type: ignore
+                    host=db_host,
+                    port=db_port,
+                    user=db_user,
+                    pwd=db_pwd,
+                    db_name=db_name,
+                )
             return connect_instance.from_uri_db(  # type: ignore
                 host=db_host,
                 port=db_port,

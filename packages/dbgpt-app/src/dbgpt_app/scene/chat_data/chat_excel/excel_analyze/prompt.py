@@ -56,6 +56,7 @@ Constraints:
 	<api-call><name>[display method]</name><args><sql>\
 	[correct duckdb data analysis sql]</sql></args></api-call> \
 	format, refer to the return format requirements
+    8. Wrap all aliases in DuckDB SQL (content after AS) with double quotes, especially when the alias contains special characters (like /, spaces) or non-English characters, e.g., AS "Total/Avg".
 
 Please think step by step, provide an answer, and ensure your answer format is as \
 follows:
@@ -72,14 +73,14 @@ assistant: [分析思路]
 3. 过滤空地区保证数据准确性  
 4. 按销售额降序排列方便业务解读
 <api-call><name>response_table</name><args><sql>
-SELECT region AS 地区,
-       SUM(sales) AS 总销售额,
-       SUM(profit) AS 总利润,
-       SUM(profit)/NULLIF(SUM(sales),0) AS 利润率
+SELECT region AS "地区",
+       SUM(sales) AS "总销售额",
+       SUM(profit) AS "总利润",
+       SUM(profit)/NULLIF(SUM(sales),0) AS "利润率"
 FROM sales_records
 WHERE region IS NOT NULL
 GROUP BY region
-ORDER BY 总销售额 DESC;
+ORDER BY "总销售额" DESC;
 </sql></args></api-call>
 
 Example 2:
@@ -93,9 +94,9 @@ assistant:
 4. NULL order_date filtering for data integrity
 <api-call><name>response_table</name><args><sql>
 SELECT 
-  DATE_TRUNC('month', order_date)::DATE AS year_month,
-  COUNT(DISTINCT order_id) AS order_count,
-  AVG(order_value) AS avg_order_value
+  DATE_TRUNC('month', order_date)::DATE AS "year_month",
+  COUNT(DISTINCT order_id) AS "order_count",
+  AVG(order_value) AS "avg_order_value"
 FROM orders
 WHERE order_date >= CURRENT_DATE - INTERVAL '2 years'
   AND order_date IS NOT NULL
@@ -147,6 +148,7 @@ DuckDB SQL数据分析回答用户的问题。
 	<api-call><name>[数据显示方式]</name><args><sql>\
 	[正确的duckdb数据分析sql]</sql></args></api-call> \
 	这样的格式，参考返回格式要求
+    8.在生成的 SQL 中，请为所有的别名（AS 后的内容）使用双引号包裹，特别是当别名包含中文、空格或特殊字符（如 /）时，例如 AS "区域" 或 AS "品牌/外观"。
 	
 请一步一步思考，给出回答，并确保你的回答内容格式如下:
     [对用户说的想法摘要]<api-call><name>[数据展示方式]</name><args>\
@@ -163,14 +165,14 @@ assistant: [分析思路]
 3. 过滤空地区保证数据准确性  
 4. 按销售额降序排列方便业务解读
 <api-call><name>response_table</name><args><sql>
-SELECT region AS 地区,
-       SUM(sales) AS 总销售额,
-       SUM(profit) AS 总利润,
-       SUM(profit)/NULLIF(SUM(sales),0) AS 利润率
+SELECT region AS "地区",
+       SUM(sales) AS "总销售额",
+       SUM(profit) AS "总利润",
+       SUM(profit)/NULLIF(SUM(sales),0) AS "利润率"
 FROM sales_records
 WHERE region IS NOT NULL
 GROUP BY region
-ORDER BY 总销售额 DESC;
+ORDER BY "总销售额" DESC;
 </sql></args></api-call>
 
 样例2：

@@ -1,0 +1,75 @@
+# DB-GPT 自定义配置 - 阿里百炼 + OpenRouter + MySQL
+# 配置说明：
+# - LLM 主力模型: 阿里百炼 qwen-turbo
+# - 备用模型: OpenRouter Claude 3 Haiku
+# - 数据库: 远程 MySQL
+# - 向量存储: 本地 ChromaDB
+
+[system]
+language = "zh"
+api_keys = []
+encrypt_key = "dbgpt_hs_custom_key_2026"
+
+# 服务配置
+[service.web]
+host = "0.0.0.0"
+port = 5670
+
+# MySQL 数据库配置
+[service.web.database]
+type = "mysql"
+host = "${env:DB_HOST:-39.102.122.9}"
+port = "${env:DB_PORT:-3306}"
+database = "${env:DB_NAME:-dbgpt}"
+user = "${env:DB_USER:-sxm1129}"
+password = "${env:DB_PASSWORD}"
+
+# RAG 存储配置
+[rag.storage]
+
+# 向量存储 - ChromaDB
+[rag.storage.vector]
+type = "chroma"
+persist_path = "pilot/data"
+
+# 知识图谱存储 - TuGraph (GraphRAG)
+[rag.storage.graph]
+type = "tugraph"
+host = "127.0.0.1"
+port = 7687
+username = "admin"
+password = "73@TuGraph"
+
+# GraphRAG 高级配置
+enable_summary = "True"                    # 启用社区摘要
+enable_similarity_search = "True"          # 启用相似度搜索
+triplet_graph_enabled = "True"             # 启用三元组图
+document_graph_enabled = "True"            # 启用文档结构图
+knowledge_graph_chunk_search_top_size = 10 # 检索 Top K
+knowledge_graph_extraction_batch_size = 5  # 批量提取大小
+extract_topk = 10                          # 提取 Top K 实体/关系
+
+# 模型配置
+[models]
+
+# 对话 LLM - 阿里百炼 qwen-turbo (快速响应)
+[[models.llms]]
+name = "qwen-turbo"
+provider = "proxy/tongyi"
+api_base = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+api_key = "${env:ALI_APIKEY}"
+
+# 知识图谱提取 LLM - 阿里百炼 qwen-max (高质量)
+[[models.llms]]
+name = "qwen-max"
+provider = "proxy/tongyi"
+api_base = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+api_key = "${env:ALI_APIKEY}"
+
+# Embedding 模型 - 阿里百炼
+[[models.embeddings]]
+name = "text-embedding-v3"
+provider = "proxy/tongyi"
+api_url = "https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings"
+api_key = "${env:ALI_APIKEY}"
+
