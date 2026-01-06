@@ -183,7 +183,8 @@ function GraphVis() {
   if (!data) return <Spin className='h-full justify-center content-center' />;
 
   return (
-      >
+    <>
+      <Graphin data={data} {...config}>
         <div style={{ position: 'absolute', top: 16, left: 16, zIndex: 10, display: 'flex', gap: 8 }}>
           <Button style={{ background: '#fff' }} onClick={back} icon={<RollbackOutlined />}>
             Back
@@ -206,7 +207,7 @@ function GraphVis() {
         }}
         spaceName={spaceName as string}
       />
-    </div>
+    </>
   );
 }
 

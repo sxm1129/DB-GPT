@@ -191,3 +191,6 @@ thirdparty
 configs/my
 .devcontainer/dev.toml
 test_docs
+
+# Next.js build output in packages
+packages/dbgpt-app/src/dbgpt_app/static/web/_next/

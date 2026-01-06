@@ -5,6 +5,7 @@ import ColorfulDB from './colorful-db';
 import ColorfulDoc from './colorful-doc';
 import ColorfulExcel from './colorful-excel';
 import ColorfulPlugin from './colorful-plugin';
+import ColorfulXSmartKG from './colorful-xsmartkg';
 import DarkSvg from './dark-svg';
 import DBSvg from './db-svg';
 import DoneIcon from './done-icon';
@@ -26,6 +27,7 @@ export {
   ColorfulDoc,
   ColorfulExcel,
   ColorfulPlugin,
+  ColorfulXSmartKG,
   DBSvg,
   DarkSvg,
   DoneIcon,

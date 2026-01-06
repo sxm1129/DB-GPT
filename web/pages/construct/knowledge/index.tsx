@@ -154,6 +154,15 @@ const Knowledge = () => {
             <div className='flex items-center gap-4'>
               <Button
                 className='border-none text-white bg-button-gradient'
+                icon={<img src="/xsmartkg_icon.png" style={{ width: 16, height: 16, objectFit: 'contain' }} alt="" />}
+                onClick={() => {
+                  router.push('/construct/knowledge/upload');
+                }}
+              >
+                {t('Build Knowledge Graph')}
+              </Button>
+              <Button
+                className='border-none text-white bg-button-gradient'
                 icon={<PlusOutlined />}
                 onClick={() => {
                   setIsAddShow(true);

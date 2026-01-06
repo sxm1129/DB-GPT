@@ -88,23 +88,39 @@ export interface KGTaskResponse {
 
 // 上传知识图谱文件请求
 export const uploadKGFiles = (formData: FormData) => {
-  return POST<FormData, KGTaskResponse>('/serve/knowledge_graph/upload', formData, {
+  return POST<FormData, KGTaskResponse>('/api/v2/serve/knowledge_graph/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
     timeout: 300000, // 5分钟超时
   });
 };
 
 // 获取任务列表
-export const getKGTasks = (params: { user_id?: string; page?: number; page_size?: number }) => {
-  return GET<any, { tasks: KGTaskResponse[]; total: number; page: number }>('/serve/knowledge_graph/tasks', params);
+export const getKGTasks = (params: { user_id?: string; page?: number; page_size?: number; status?: string }) => {
+  return GET<any, { tasks: KGTaskResponse[]; total: number; page: number }>('/api/v2/serve/knowledge_graph/tasks', params);
 };
 
 // 获取任务详情
 export const getKGTaskDetail = (taskId: string) => {
-  return GET<any, KGTaskResponse>(`/serve/knowledge_graph/tasks/${taskId}`);
+  return GET<any, KGTaskResponse>(`/api/v2/serve/knowledge_graph/tasks/${taskId}`);
 };
 
 // 取消任务
 export const cancelKGTask = (taskId: string) => {
-  return POST<any, any>(`/serve/knowledge_graph/tasks/${taskId}/cancel`);
+  return POST<any, any>(`/api/v2/serve/knowledge_graph/tasks/${taskId}/cancel`);
 };
+
+// 获取 TuGraph 图空间列表
+export const getGraphSpaces = () => {
+  return GET<any, { spaces: string[] }>('/api/v2/serve/knowledge_graph/spaces');
+};
+
+// 创建新的图空间
+export const createGraphSpace = (spaceName: string) => {
+  return POST<{ space_name: string }, any>('/api/v2/serve/knowledge_graph/spaces', { space_name: spaceName });
+};
+
+// 删除任务
+export const deleteKGTask = (taskId: string) => {
+  return DELETE<any, any>(`/api/v2/serve/knowledge_graph/tasks/${taskId}`);
+};
+

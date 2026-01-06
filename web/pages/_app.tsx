@@ -103,7 +103,7 @@ function LayoutWrapper({ children }: { children: React.ReactNode }) {
             <SideBar />
           </div>
         )}
-        <div className='flex flex-col flex-1 relative overflow-hidden'>{children}</div>
+        <div className='flex flex-col flex-1 relative overflow-y-auto'>{children}</div>
         <FloatHelper />
       </div>
     );

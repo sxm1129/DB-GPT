@@ -38,7 +38,7 @@ _DEFAULT_MODEL = "qwen-max-latest"
     tags={"order": TAGS_ORDER_HIGH},
     description=_("Tongyi proxy LLM configuration."),
     documentation_url="https://help.aliyun.com/zh/model-studio/getting-started/first-api-call-to-qwen",
-    show_in_ui=False,
+    show_in_ui=True,
 )
 @dataclass
 class TongyiDeployModelParameters(OpenAICompatibleDeployModelParameters):

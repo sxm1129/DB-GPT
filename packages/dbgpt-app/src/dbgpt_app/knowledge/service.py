@@ -632,10 +632,24 @@ class KnowledgeService:
         return chat
 
     def query_graph(self, space_name, limit):
-        spaces = self.get_knowledge_space(KnowledgeSpaceRequest(name=space_name))
-        if len(spaces) != 1:
-            raise Exception(f"invalid space name:{space_name}")
-        # space = spaces[0]
+        # Relax strict metadata check for graph visualization to support TuGraph default or external spaces.
+        try:
+            spaces = self.get_knowledge_space(KnowledgeSpaceRequest(name=space_name))
+            if len(spaces) != 1 and space_name != "default":
+                # If not found and not 'default', check if graph storage is configured
+                storage_config = self.storage_manager.storage_config()
+                if not (hasattr(storage_config, "graph") and storage_config.graph):
+                    raise Exception(f"invalid space name:{space_name}")
+        except Exception:
+            # If metadata check fails, allow 'default' or check for graph storage config
+            if space_name != "default":
+                try:
+                    storage_config = self.storage_manager.storage_config()
+                    if not (hasattr(storage_config, "graph") and storage_config.graph):
+                        raise Exception(f"invalid space name:{space_name}")
+                except Exception:
+                    raise Exception(f"invalid space name:{space_name}")
+
         graph_store = self.storage_manager.create_kg_store(index_name=space_name)
         graph = graph_store.query_graph(limit=limit)
         res = {"nodes": [], "edges": []}

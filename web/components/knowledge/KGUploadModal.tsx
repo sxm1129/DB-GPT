@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Modal, Upload, Form, Input, Button, Progress, message, Space, List, Tag, Table, Radio } from 'antd';
-import { InboxOutlined, LoadingOutlined, CheckCircleOutlined, SyncOutlined, CloseCircleOutlined } from '@ant-design/icons';
+import { Modal, Upload, Form, Input, Button, Progress, message, Space, List, Tag, Table, Radio, AutoComplete, Divider } from 'antd';
+import { InboxOutlined, LoadingOutlined, CheckCircleOutlined, SyncOutlined, CloseCircleOutlined, PlusOutlined } from '@ant-design/icons';
 import type { UploadFile } from 'antd/es/upload/interface';
-import { uploadKGFiles, getKGTasks, KGTaskResponse } from '@/client/api/knowledge';
+import { uploadKGFiles, getKGTasks, getGraphSpaces, KGTaskResponse } from '@/client/api/knowledge';
 
 const { Dragger } = Upload;
 
@@ -22,17 +22,42 @@ const KGUploadModal: React.FC<KGUploadModalProps> = ({ visible, onCancel, onSucc
   const [taskStatus, setTaskStatus] = useState<string | null>(null);
   const [statusMsg, setStatusMsg] = useState<string>('');
   const [historyTasks, setHistoryTasks] = useState<KGTaskResponse[]>([]);
+  const [excelMode, setExcelMode] = useState<string>('auto');
+  const [entitiesCount, setEntitiesCount] = useState<number>(0);
+  const [relationsCount, setRelationsCount] = useState<number>(0);
+  const [columnMapping, setColumnMapping] = useState<{
+    subjectColumn: string;
+    predicate: string;
+    objectColumn: string;
+  }>({ subjectColumn: '', predicate: '', objectColumn: '' });
+  const [graphSpaces, setGraphSpaces] = useState<string[]>([]);
+  const [loadingSpaces, setLoadingSpaces] = useState(false);
   
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
     if (visible) {
       fetchHistory();
+      fetchGraphSpaces();
     }
     return () => {
       if (wsRef.current) wsRef.current.close();
     };
   }, [visible]);
+
+  const fetchGraphSpaces = async () => {
+    setLoadingSpaces(true);
+    try {
+      const [err, res] = await getGraphSpaces();
+      if (res && res.spaces) {
+        setGraphSpaces(res.spaces);
+      }
+    } catch (e) {
+      console.error('Failed to fetch graph spaces', e);
+    } finally {
+      setLoadingSpaces(false);
+    }
+  };
 
   const fetchHistory = async () => {
     try {
@@ -99,6 +124,8 @@ const KGUploadModal: React.FC<KGUploadModalProps> = ({ visible, onCancel, onSucc
         if (data.progress !== undefined) setProgress(Math.floor(data.progress * 100));
         if (data.status) setTaskStatus(data.status);
         if (data.message) setStatusMsg(data.message);
+        if (data.entities_count !== undefined) setEntitiesCount(data.entities_count);
+        if (data.relations_count !== undefined) setRelationsCount(data.relations_count);
         
         if (data.status === 'completed' || data.status === 'failed') {
           setUploading(false);
@@ -148,24 +175,58 @@ const KGUploadModal: React.FC<KGUploadModalProps> = ({ visible, onCancel, onSucc
       {!taskId && !uploading ? (
         <Form form={form} layout="vertical" initialValues={{ graph_space_name: spaceName || '', excel_mode: 'auto' }}>
           <Form.Item name="graph_space_name" label="Graph Space Name" rules={[{ required: true }]}>
-            <Input placeholder="Enter graph space name (e.g. MyKnowledgeGraph)" />
+            <AutoComplete
+              placeholder="Select existing or type new name"
+              options={graphSpaces.map(s => ({ value: s, label: s }))}
+              filterOption={(inputValue, option) =>
+                option?.value?.toUpperCase().indexOf(inputValue.toUpperCase()) !== -1
+              }
+              notFoundContent={loadingSpaces ? 'Loading...' : 'No existing spaces'}
+            />
           </Form.Item>
           
-          <Form.Item name="excel_mode" label="Excel Parsing Mode">
-            <Radio.Group>
-              <Radio value="auto">Auto (LLM Semantic)</Radio>
-              <Radio value="manual">Structured (Column Mapping)</Radio>
+          <Form.Item name="excel_mode" label="Processing Mode">
+            <Radio.Group onChange={(e) => setExcelMode(e.target.value)}>
+              <Radio value="auto">Auto (LLM Semantic Extraction)</Radio>
+              <Radio value="mapping">Structured (Column Mapping)</Radio>
             </Radio.Group>
           </Form.Item>
+
+          {excelMode === 'mapping' && (
+            <div style={{ background: '#f6f8fa', padding: 16, borderRadius: 8, marginBottom: 16 }}>
+              <h4 style={{ margin: '0 0 12px 0' }}>Column Mapping Configuration</h4>
+              <Form.Item label="Subject Column (Entity 1)" style={{ marginBottom: 8 }}>
+                <Input 
+                  placeholder="e.g., 公司名称" 
+                  value={columnMapping.subjectColumn}
+                  onChange={(e) => setColumnMapping({...columnMapping, subjectColumn: e.target.value})}
+                />
+              </Form.Item>
+              <Form.Item label="Relation (Predicate)" style={{ marginBottom: 8 }}>
+                <Input 
+                  placeholder="e.g., 负责人是" 
+                  value={columnMapping.predicate}
+                  onChange={(e) => setColumnMapping({...columnMapping, predicate: e.target.value})}
+                />
+              </Form.Item>
+              <Form.Item label="Object Column (Entity 2)" style={{ marginBottom: 0 }}>
+                <Input 
+                  placeholder="e.g., 负责人" 
+                  value={columnMapping.objectColumn}
+                  onChange={(e) => setColumnMapping({...columnMapping, objectColumn: e.target.value})}
+                />
+              </Form.Item>
+            </div>
+          )}
 
           <Form.Item name="custom_prompt" label="Custom Extraction Prompt (Optional)">
             <Input.TextArea placeholder="Default: Extract entities and relations as triplets..." rows={3} />
           </Form.Item>
 
-          <Form.Item label="Excel Files">
+          <Form.Item label="Files">
             <Dragger
               multiple
-              accept=".xlsx,.xls"
+              accept=".txt,.md,.docx,.pdf,.xlsx,.xls"
               fileList={fileList}
               onRemove={(file) => {
                 const index = fileList.indexOf(file);
@@ -179,8 +240,8 @@ const KGUploadModal: React.FC<KGUploadModalProps> = ({ visible, onCancel, onSucc
               }}
             >
               <p className="ant-upload-drag-icon"><InboxOutlined /></p>
-              <p className="ant-upload-text">Click or drag Excel files to this area to upload</p>
-              <p className="ant-upload-hint">Support for single or bulk upload. Strictly prohibited from uploading company data or other sensitive files.</p>
+              <p className="ant-upload-text">Click or drag files to this area</p>
+              <p className="ant-upload-hint">Supports: TXT, MD, DOCX, PDF, XLSX, XLS</p>
             </Dragger>
           </Form.Item>
 
@@ -201,13 +262,63 @@ const KGUploadModal: React.FC<KGUploadModalProps> = ({ visible, onCancel, onSucc
             {taskStatus === 'completed' ? <CheckCircleOutlined style={{ fontSize: 48, color: '#52c41a' }} /> : null}
             {taskStatus === 'failed' ? <CloseCircleOutlined style={{ fontSize: 48, color: '#ff4d4f' }} /> : null}
             
-            <h3 style={{ margin: 0 }}>{taskStatus?.toUpperCase()}</h3>
-            <p style={{ color: '#666' }}>{statusMsg || 'Initializing task...'}</p>
+            <h3 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>{taskStatus?.toUpperCase()}</h3>
+            <p style={{ color: '#666', margin: 0 }}>{statusMsg || 'Initializing task...'}</p>
             
-            <Progress percent={progress} status={taskStatus === 'failed' ? 'exception' : 'active'} strokeWidth={10} />
+            <Progress 
+              percent={progress} 
+              status={taskStatus === 'failed' ? 'exception' : taskStatus === 'completed' ? 'success' : 'active'} 
+              strokeWidth={12}
+              strokeColor={{ '0%': '#108ee9', '100%': '#87d068' }}
+              style={{ maxWidth: 400, margin: '0 auto' }}
+            />
             
-            <div style={{ marginTop: 24 }}>
-              <Button onClick={() => { setTaskId(null); setUploading(false); fetchHistory(); }}>Back</Button>
+            {/* 统计卡片 - Glassmorphism 风格 */}
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'center', 
+              gap: 24, 
+              marginTop: 24,
+            }}>
+              <div style={{ 
+                textAlign: 'center', 
+                padding: '20px 32px', 
+                borderRadius: 12,
+                background: 'linear-gradient(135deg, rgba(24, 144, 255, 0.1) 0%, rgba(24, 144, 255, 0.05) 100%)',
+                border: '1px solid rgba(24, 144, 255, 0.2)',
+                backdropFilter: 'blur(10px)',
+              }}>
+                <div style={{ fontSize: 32, fontWeight: 'bold', color: '#1890ff' }}>{entitiesCount}</div>
+                <div style={{ color: '#666', marginTop: 4 }}>Entities</div>
+              </div>
+              <div style={{ 
+                textAlign: 'center', 
+                padding: '20px 32px', 
+                borderRadius: 12,
+                background: 'linear-gradient(135deg, rgba(82, 196, 26, 0.1) 0%, rgba(82, 196, 26, 0.05) 100%)',
+                border: '1px solid rgba(82, 196, 26, 0.2)',
+                backdropFilter: 'blur(10px)',
+              }}>
+                <div style={{ fontSize: 32, fontWeight: 'bold', color: '#52c41a' }}>{relationsCount}</div>
+                <div style={{ color: '#666', marginTop: 4 }}>Relations</div>
+              </div>
+            </div>
+            
+            <div style={{ marginTop: 24, display: 'flex', justifyContent: 'center', gap: 12 }}>
+              <Button onClick={() => { setTaskId(null); setUploading(false); setEntitiesCount(0); setRelationsCount(0); fetchHistory(); }}>
+                Back
+              </Button>
+              {taskStatus === 'completed' && (
+                <Button 
+                  type="primary" 
+                  onClick={() => {
+                    const graphSpaceName = form.getFieldValue('graph_space_name');
+                    window.location.href = `/knowledge/graph?spaceName=${encodeURIComponent(graphSpaceName)}`;
+                  }}
+                >
+                  View Graph →
+                </Button>
+              )}
             </div>
           </Space>
         </div>

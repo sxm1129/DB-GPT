@@ -69,12 +69,17 @@ class KGUploadTaskDao(BaseDao):
         session = self.get_raw_session()
         session.add(entity)
         session.commit()
+        session.refresh(entity)  # 刷新确保所有属性都被加载
+        session.expunge(entity)  # 从 session 分离实体
         session.close()
         return entity.task_id
+
 
     def get_task(self, task_id: str) -> Optional[KGUploadTaskEntity]:
         session = self.get_raw_session()
         task = session.query(KGUploadTaskEntity).filter(KGUploadTaskEntity.task_id == task_id).first()
+        if task:
+            session.expunge(task)
         session.close()
         return task
 
@@ -84,13 +89,25 @@ class KGUploadTaskDao(BaseDao):
         session.commit()
         session.close()
 
-    def list_tasks(self, user_id: str, page: int = 1, limit: int = 20):
+    def list_tasks(self, user_id: str, page: int = 1, limit: int = 20, status: Optional[str] = None):
         session = self.get_raw_session()
         query = session.query(KGUploadTaskEntity).filter(KGUploadTaskEntity.user_id == user_id)
+        if status:
+            query = query.filter(KGUploadTaskEntity.status == status)
         total = query.count()
         tasks = query.order_by(KGUploadTaskEntity.gmt_created.desc()).offset((page - 1) * limit).limit(limit).all()
+        for task in tasks:
+            session.expunge(task)
         session.close()
         return tasks, total
+
+    def delete_task(self, task_id: str):
+        """删除任务"""
+        session = self.get_raw_session()
+        session.query(KGUploadTaskEntity).filter(KGUploadTaskEntity.task_id == task_id).delete()
+        session.commit()
+        session.close()
+
 
 class KGUploadFileDao(BaseDao):
     def create_file_detail(self, entity: KGUploadFileEntity):

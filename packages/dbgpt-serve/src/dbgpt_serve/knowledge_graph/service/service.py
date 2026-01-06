@@ -62,17 +62,19 @@ class Service(BaseComponent):
             # 寻找类型为 tugraph 的连接配置
             # 优先查找名为 'tugraph_db' 的配置，如果没找到则找第一个类型匹配的
             db_list = self._connector_manager.get_db_list()
+            logger.info(f"xSmartKG: Available databases: {db_list}")
             tugraph_db_name = None
             for db in db_list:
-                if db.get("db_type") == "tugraph":
+                db_type = db.get("db_type", "").lower()
+                if db_type == "tugraph":
                     tugraph_db_name = db.get("db_name")
                     break
             
             if tugraph_db_name:
-                logger.info(f"Found TuGraph datasource: {tugraph_db_name}")
+                logger.info(f"xSmartKG: Found TuGraph datasource: {tugraph_db_name}")
                 self._tugraph_connector = self._connector_manager.get_connector(tugraph_db_name)
             else:
-                logger.warning("No TuGraph datasource found in system configuration.")
+                logger.warning("xSmartKG: No TuGraph datasource found in system configuration.")
         except Exception as e:
             logger.error(f"Failed to init TuGraph connector: {str(e)}")
 
@@ -80,6 +82,13 @@ class Service(BaseComponent):
         if not hasattr(self, "_kg_dag") or self._kg_dag is None:
             self._kg_dag = create_kg_dag(self._system_app, self._config, self._tugraph_connector)
         return self._kg_dag
+
+    def _get_mapping_dag(self):
+        """获取 Excel 列映射模式的 DAG"""
+        if not hasattr(self, "_kg_mapping_dag") or self._kg_mapping_dag is None:
+            from ..awel.dag import create_kg_mapping_dag
+            self._kg_mapping_dag = create_kg_mapping_dag(self._tugraph_connector)
+        return self._kg_mapping_dag
 
     @classmethod
     def get_instance(cls, system_app: SystemApp):
@@ -156,7 +165,8 @@ class Service(BaseComponent):
                 request.graph_space_name, 
                 request.excel_mode,
                 [f["path"] for f in saved_files],
-                request.custom_prompt
+                request.custom_prompt,
+                request.column_mapping
             )
         )
 
@@ -168,8 +178,8 @@ class Service(BaseComponent):
             raise Exception(f"Task {task_id} not found")
         return self._to_task_response(entity)
 
-    def list_tasks(self, user_id: str, page: int, limit: int) -> KGUploadTaskListResponse:
-        entities, total = self.task_dao.list_tasks(user_id, page, limit)
+    def list_tasks(self, user_id: str, page: int, limit: int, status: Optional[str] = None) -> KGUploadTaskListResponse:
+        entities, total = self.task_dao.list_tasks(user_id, page, limit, status)
         return KGUploadTaskListResponse(
             tasks=[self._to_task_response(e) for e in entities],
             total=total,
@@ -181,8 +191,96 @@ class Service(BaseComponent):
         await self.ws_manager.broadcast(task_id, {"type": "task_cancelled", "task_id": task_id})
         return {"success": True}
 
+    async def list_graph_spaces(self):
+        """获取可用的图空间列表"""
+        spaces = []
+        try:
+            if self._tugraph_connector:
+                # 尝试从 TuGraph 获取图空间列表
+                try:
+                    # 使用管理会话 (default 数据库) 来获取所有图列表
+                    with self._tugraph_connector._driver.session(database="default") as session:
+                        result = session.run("CALL dbms.graph.listGraphs()").data()
+                        if result:
+                            spaces = [row["graph_name"] for row in result if "graph_name" in row]
+                            logger.info(f"xSmartKG: Listed graphs from TuGraph (dbms): {spaces}")
+                except Exception as e:
+                    logger.warning(f"xSmartKG: Failed to list graphs from TuGraph via CALL dbms.graph.listGraphs(): {str(e)}")
+                    # 尝试备选命令
+                    try:
+                        result = self._tugraph_connector.run("CALL db.listGraphs()")
+                        if result:
+                            spaces = [row[0] for row in result if row]
+                            logger.info(f"xSmartKG: Listed graphs from TuGraph (db): {spaces}")
+                    except Exception as e2:
+                        logger.warning(f"xSmartKG: Failed to list graphs from TuGraph via CALL db.listGraphs(): {str(e2)}")
+                        # 回退：返回默认空间
+                        spaces = ["default"]
+            else:
+                # 没有 TuGraph 连接时，从历史任务中获取已使用的空间
+                tasks, _ = self.task_dao.list_tasks(user_id="", page=1, limit=100)
+                seen = set()
+                for task in tasks:
+                    if task.graph_space_name and task.graph_space_name not in seen:
+                        spaces.append(task.graph_space_name)
+                        seen.add(task.graph_space_name)
+                # 如果还是空，默认给一个
+                if not spaces:
+                    spaces = ["default"]
+        except Exception as e:
+            logger.error(f"xSmartKG: Error listing graph spaces: {str(e)}")
+        
+        # 确保 spaces 是列表且不为空
+        if not spaces:
+            spaces = ["default"]
+            
+        return {"spaces": spaces}
+
+    async def create_graph_space(self, space_name: str):
+        """创建新的图空间"""
+        try:
+            if self._tugraph_connector:
+                self._tugraph_connector.create_graph(space_name)
+                return {"success": True, "space_name": space_name}
+            else:
+                return {"success": False, "error": "TuGraph not connected"}
+        except Exception as e:
+            logger.error(f"Failed to create graph space {space_name}: {str(e)}")
+            return {"success": False, "error": str(e)}
+
+    async def delete_task(self, task_id: str):
+        """删除任务"""
+        try:
+            task = self.task_dao.get_task_by_id(task_id)
+            if not task:
+                return {"success": False, "error": "Task not found"}
+            
+            # 删除任务记录
+            self.task_dao.delete_task(task_id)
+            logger.info(f"Deleted task {task_id}")
+            return {"success": True, "task_id": task_id}
+        except Exception as e:
+            logger.error(f"Failed to delete task {task_id}: {str(e)}")
+            return {"success": False, "error": str(e)}
+
+
     def _to_task_response(self, e: KGUploadTaskEntity) -> KGUploadTaskResponse:
-        file_vos = [FileInfoVO(name=f["name"], size=f["size"], type=f["type"]) for f in e.file_names]
+        file_vos = []
+        for f in e.file_names:
+            status = f.get("status", "pending")
+            progress = f.get("progress", 0.0)
+            # 如果任务已完成，所有文件标记为完成
+            if e.status == "completed":
+                status = "completed"
+                progress = 1.0
+            file_vos.append(FileInfoVO(
+                name=f["name"], 
+                size=f["size"], 
+                type=f["type"],
+                status=status,
+                progress=progress
+            ))
+        
         return KGUploadTaskResponse(
             task_id=e.task_id,
             graph_space_name=e.graph_space_name,
@@ -206,13 +304,26 @@ class Service(BaseComponent):
             "error_message": message if status == "failed" else None,
             "gmt_modified": datetime.now()
         })
-        await self.ws_manager.send_progress(task_id, progress, status=status, message=message)
+        # 获取最新任务状态以获取最新的 file_names (可能包含各文件进度)
+        task = self.task_dao.get_task(task_id)
+        file_vos = []
+        if task:
+            task_resp = self._to_task_response(task)
+            file_vos = [f.dict() for f in task_resp.file_names]
 
-    async def _run_task_real(self, task_id: str, graph_space: str, excel_mode: str, file_paths: List[str], custom_prompt: Optional[str]):
+        await self.ws_manager.send_progress(
+            task_id, 
+            progress, 
+            status=status, 
+            message=message,
+            file_names=file_vos
+        )
+
+    async def _run_task_real(self, task_id: str, graph_space: str, excel_mode: str, file_paths: List[str], custom_prompt: Optional[str], column_mapping=None):
         """执行真实的 AWEL 任务流程"""
-        logger.info(f"Starting real task processing for {task_id}")
+        logger.info(f"Starting real task processing for {task_id}, mode: {excel_mode}")
         try:
-            await self._update_task_status(task_id, "running", 0.1, "开始解析文件...")
+            await self._update_task_status(task_id, "running", 10.0, "开始解析文件...")
             
             # 准备上下文
             ctx = KGTaskContext(
@@ -220,28 +331,49 @@ class Service(BaseComponent):
                 graph_space=graph_space,
                 excel_mode=excel_mode,
                 file_paths=file_paths,
-                custom_prompt=custom_prompt
+                custom_prompt=custom_prompt,
+                column_mapping=column_mapping
             )
             
-            # 使用 AWEL DAG 执行
-            dag = self._get_worker_dag()
+            # 根据 excel_mode 选择 DAG
+            if excel_mode == "mapping" and column_mapping:
+                dag = self._get_mapping_dag()
+            else:
+                dag = self._get_worker_dag()
             
-            # 动态调整导入目标的图空间
-            import_task = dag.leaf_nodes[0]
-            if hasattr(import_task, "_graph_name"):
-                import_task._graph_name = graph_space
+            # 获取 DAG 的根节点（第一个 Operator - FileParsingOperator）
+            root_nodes = dag.root_nodes
+            if not root_nodes:
+                raise Exception("DAG has no root nodes")
+            start_node = root_nodes[0]
             
-            await self._update_task_status(task_id, "running", 0.3, "正在利用 LLM 提取知识三元组...")
+            # 获取末端节点用于动态调整图空间
+            leaf_nodes = dag.leaf_nodes
+            if leaf_nodes and hasattr(leaf_nodes[0], "_graph_name"):
+                leaf_nodes[0]._graph_name = graph_space
             
-            # 运行 DAG
-            result_count = await dag.call(ctx)
+            await self._update_task_status(task_id, "running", 30.0, "正在利用 LLM 提取知识三元组...")
             
-            await self._update_task_status(task_id, "completed", 1.0, f"提取完成，成功导入 {result_count} 个三元组")
+            # 使用 DefaultWorkflowRunner 执行 DAG
+            # 从末端节点开始执行，但将数据作为根节点的call_data传入
+            from dbgpt.core.awel.runner.local_runner import DefaultWorkflowRunner
+            runner = DefaultWorkflowRunner()
+            
+            # execute_workflow 需要从末端节点调用，会自动执行上游节点
+            # 重要: SimpleCallDataInputSource 期望 call_data 格式为 {"data": actual_data}
+            end_node = leaf_nodes[0] if leaf_nodes else start_node
+            dag_ctx = await runner.execute_workflow(end_node, call_data={"data": ctx})
+            
+            # 从 DAG Context 获取结果
+            task_output = dag_ctx.current_task_context.task_output
+            result_count = task_output.output if task_output else 0
+            
+            await self._update_task_status(task_id, "completed", 100.0, f"提取完成，成功导入 {result_count} 个三元组")
             self.task_dao.update_task(task_id, {
                 "status": "completed",
                 "progress": 100.0,
                 "completed_at": datetime.now(),
-                "relations_count": result_count
+                "relations_count": result_count if isinstance(result_count, int) else 0
             })
             await self.ws_manager.broadcast(task_id, {"type": "task_completed", "task_id": task_id})
             
@@ -249,40 +381,40 @@ class Service(BaseComponent):
             logger.error(f"Task {task_id} failed: {str(e)}")
             await self._update_task_status(task_id, "failed", 1.0, f"处理失败: {str(e)}")
 
-    async def _run_task_mock(self, task_id: str):
-        pass
 
-        self.task_dao.update_task(task_id, {"status": "running"})
-        await self.ws_manager.send_progress(task_id, 0, status="running")
+    async def _run_task_mock(self, task_id: str):
+        """模拟执行任务用于测试"""
+        task = self.task_dao.get_task(task_id)
+        if not task:
+            logger.error(f"Task {task_id} not found in mock")
+            return
+
+        self.task_dao.update_task(task_id, {"status": "running", "progress": 0.0})
+        await self._update_task_status(task_id, "running", 0.0, "任务启动中...")
 
         total = task.total_files
-        for i, file_info in enumerate(task.file_names):
+        file_list = task.file_names
+        for i, file_info in enumerate(file_list):
             file_name = file_info["name"]
-            self.task_dao.update_task(task_id, {"current_file": file_name})
-            self.file_dao.update_file_detail(task_id, file_name, {"status": "processing"})
             
             # 模拟处理每个文件
             for p in range(0, 101, 20):
-                file_progress = p
-                overall_progress = (i / total * 100) + (p / 100 * (1 / total) * 100)
-                
-                # 更新任务和发送 WS
-                self.task_dao.update_task(task_id, {"progress": overall_progress})
-                await self.ws_manager.send_progress(
-                    task_id, 
-                    overall_progress, 
-                    current_file=file_name,
-                    file_progress=file_progress,
-                    entities_count=task.entities_count + (i * 10) + (p // 10),
-                    relations_count=task.relations_count + (i * 5) + (p // 20)
-                )
                 await asyncio.sleep(0.5)
-            
-            self.file_dao.update_file_detail(task_id, file_name, {
-                "status": "completed", 
-                "progress": 100.0,
-                "chunks_count": 5
-            })
+                # 更新当前文件的进度并保存回 task entity 的 JSON 中
+                file_info["status"] = "processing" if p < 100 else "completed"
+                file_info["progress"] = float(p) # 0-100
+                self.task_dao.update_task(task_id, {
+                    "file_names": file_list,
+                    "current_file": file_name
+                })
+                
+                overall_progress = (i / total * 100.0) + (p / total)
+                await self._update_task_status(
+                    task_id, 
+                    "running", 
+                    overall_progress, 
+                    f"正在处理文件: {file_name} ({p}%)"
+                )
 
         self.task_dao.update_task(task_id, {
             "status": "completed", 
@@ -291,5 +423,6 @@ class Service(BaseComponent):
             "entities_count": total * 12,
             "relations_count": total * 7
         })
+        await self._update_task_status(task_id, "completed", 100.0, "任务处理完成")
         await self.ws_manager.broadcast(task_id, {"type": "task_completed", "task_id": task_id})
         logger.info(f"Mock task {task_id} completed")

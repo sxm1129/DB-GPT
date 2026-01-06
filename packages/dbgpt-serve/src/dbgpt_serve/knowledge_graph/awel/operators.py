@@ -10,7 +10,7 @@ from dbgpt.core import LLMClient, ModelRequest, ModelMessage, Document
 from dbgpt_ext.datasource.conn_tugraph import TuGraphConnector
 from dbgpt_ext.rag.knowledge.factory import KnowledgeFactory
 from dbgpt.rag.knowledge.base import KnowledgeType
-from ..api.schemas import KGUploadTaskCreateRequest
+from ..api.schemas import KGUploadTaskCreateRequest, ExcelColumnMapping
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +21,7 @@ class KGTaskContext:
     excel_mode: str
     file_paths: List[str]
     custom_prompt: Optional[str] = None
+    column_mapping: Optional[ExcelColumnMapping] = None
 
 class FileParsingOperator(MapOperator[KGTaskContext, List[Document]]):
     """解析多样化的文件类型（Excel, PDF, Word, TXT, MD）并提取文档内容"""
@@ -89,8 +90,8 @@ class KGExtractionOperator(MapOperator[List[Document], List[Tuple[str, str, str]
         
         request = ModelRequest(model=self._model_name, messages=messages)
         
-        # 调用 LLM
-        response = await self._llm_client.generate_stream(request)
+        # 调用 LLM (generate_stream 返回异步生成器，不需要 await)
+        response = self._llm_client.generate_stream(request)
         full_text = ""
         async for chunk in response:
             full_text += chunk.text
@@ -179,3 +180,54 @@ class TuGraphImportOperator(MapOperator[List[Tuple[str, str, str]], int]):
             self._connector._graph = original_graph
             
         return count
+
+
+class ExcelMappingOperator(MapOperator[KGTaskContext, List[Tuple[str, str, str]]]):
+    """Excel 列映射模式：直接从 Excel 列中提取实体和关系，跳过 LLM 提取"""
+    
+    async def map(self, ctx: KGTaskContext) -> List[Tuple[str, str, str]]:
+        if not ctx.column_mapping:
+            logger.warning("No column_mapping provided, returning empty triplets")
+            return []
+            
+        triplets = []
+        mapping = ctx.column_mapping
+        
+        for file_path in ctx.file_paths:
+            if not file_path.endswith(('.xlsx', '.xls')):
+                logger.warning(f"Skipping non-Excel file: {file_path}")
+                continue
+                
+            try:
+                # 读取 Excel 文件
+                df = pd.read_excel(file_path)
+                logger.info(f"Read Excel file {file_path}, columns: {list(df.columns)}")
+                
+                # 从关系配置中提取三元组
+                for rel_config in mapping.relation_configs:
+                    subject_col = rel_config.subject_column
+                    predicate = rel_config.predicate
+                    object_col = rel_config.object_column
+                    
+                    if subject_col not in df.columns or object_col not in df.columns:
+                        logger.warning(f"Column not found: {subject_col} or {object_col}")
+                        continue
+                    
+                    # 遍历每行，生成三元组
+                    for _, row in df.iterrows():
+                        subject = str(row[subject_col]).strip()
+                        obj = str(row[object_col]).strip()
+                        
+                        # 跳过空值
+                        if subject and obj and subject != 'nan' and obj != 'nan':
+                            triplets.append((subject, predicate, obj))
+                            
+                logger.info(f"Extracted {len(triplets)} triplets from {file_path}")
+                
+            except Exception as e:
+                logger.error(f"Failed to process Excel file {file_path}: {str(e)}")
+                
+        # 将 graph_space 存入共享数据供导入使用
+        await self.current_dag_context.save_to_share_data("kg_graph_space", ctx.graph_space)
+        
+        return triplets

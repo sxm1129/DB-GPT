@@ -54,6 +54,16 @@ function ConstructLayout({ children }: { children: React.ReactNode }) {
       icon: <PartitionOutlined />,
       path: '/knowledge',
     },
+    {
+      key: 'knowledge/upload',
+      name: (
+        <span className="flex items-center gap-1.5">
+          <img src="/xsmartkg_icon.png" style={{ width: 16, height: 16, objectFit: 'contain' }} alt="kg-docs" />
+          <span>kg-docs</span>
+        </span>
+      ),
+      path: '/knowledge/upload',
+    },
     // {
     //   key: 'agent',
     //   name: t('Plugins'),
@@ -74,7 +84,9 @@ function ConstructLayout({ children }: { children: React.ReactNode }) {
     },
   ];
   const router = useRouter();
-  const activeKey = router.pathname.split('/')[2];
+  const activeKey = router.pathname.includes('/construct/knowledge/upload') 
+    ? 'knowledge/upload' 
+    : router.pathname.split('/')[2];
   // const isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches; // unused
 
   return (
