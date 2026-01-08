@@ -13,6 +13,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import XSmartKGLogo from '@/components/icons/XSmartKGLogo';
 
 type SettingItem = {
   key: string;
@@ -55,7 +56,6 @@ function SideBar() {
   const { isMenuExpand, setIsMenuExpand, mode, setMode, adminList } = useContext(ChatContext);
   const { pathname } = useRouter();
   const { t, i18n } = useTranslation();
-  const [logo, setLogo] = useState<string>('/xsmartkg_logo.png');
 
   const hasAdmin = useMemo(() => {
     const { user_id } = JSON.parse(localStorage.getItem(STORAGE_USERINFO_KEY) || '{}');
@@ -425,9 +425,6 @@ function SideBar() {
     if (language === 'en') moment.locale('en');
   }, [i18n.language]);
 
-  useEffect(() => {
-    setLogo('/xsmartkg_logo.png');
-  }, [mode]);
 
   if (!isMenuExpand) {
     return (
@@ -438,9 +435,7 @@ function SideBar() {
         // }}
       >
         <div>
-          <Link href='/' className='flex justify-center items-center pb-4'>
-            <Image src={isMenuExpand ? logo : '/xsmartkg_icon.png'} alt='xSmartKG' width={40} height={40} />
-          </Link>
+          <XSmartKGLogo isCollapsed={true} className="pb-4" />
           <div className='flex flex-col gap-4 items-center'>
             {functions.map(i => (
               <Link key={i.key} className='h-12 flex items-center' href={i.path}>
@@ -474,9 +469,12 @@ function SideBar() {
     >
       <div>
         {/* LOGO */}
-        <Link href='/' className='flex items-center justify-center p-2 pb-4'>
-          <Image src={isMenuExpand ? logo : '/xsmartkg_icon.png'} alt='xSmartKG' width={180} height={40} />
-        </Link>
+        <div
+          className='flex items-center justify-center p-2 pb-6 cursor-pointer overflow-hidden transition-all duration-300'
+          onClick={() => (window.location.href = '/')}
+        >
+          <XSmartKGLogo isCollapsed={false} className="pl-4" />
+        </div>
         {/* functions */}
         <div className='flex flex-col gap-4'>
           {functions.map(item => {
@@ -500,13 +498,12 @@ function SideBar() {
         </div>
       </div>
 
-      {/* Settings */}
-      <div className='pt-4'>
-        <span className={cls('flex items-center w-full h-12 px-4 glass-light dark:glass-dark rounded-xl')}>
-          <div className='mr-3 w-full'>
+      <div className='pt-2'>
+        <div className={cls('flex items-center w-full min-h-[56px] px-3 glass-nav rounded-2xl shadow-glass-sm border border-white/10 dark:border-white/5')}>
+          <div className='w-full'>
             <UserBar />
           </div>
-        </span>
+        </div>
         <div className='flex items-center justify-around py-4 mt-2 border-t border-dashed border-theme-border dark:border-white/10'>
           {settings.map(item => (
             <div key={item.key}>

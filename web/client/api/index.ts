@@ -39,6 +39,12 @@ const LONG_TIME_API: string[] = [
 ];
 
 ins.interceptors.request.use(request => {
+  // Proxy the requests that don't start with /api but are likely backend APIs
+  const proxyPaths = ['/knowledge/', '/db/', '/chat/', '/params/', '/editor/', '/sql/', '/document/', '/agent/', '/personal/', '/prompt/'];
+  if (request.url && proxyPaths.some(p => request.url?.startsWith(p)) && !request.url.startsWith('/api')) {
+    request.url = `/proxy_api${request.url}`;
+  }
+
   const isLongTimeApi = LONG_TIME_API.some(item => request.url && request.url.indexOf(item) >= 0);
   if (!request.timeout) {
     request.timeout = isLongTimeApi ? 60000 : 100000;

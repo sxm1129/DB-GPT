@@ -183,8 +183,9 @@ function GraphVis() {
   if (!data) return <Spin className='h-full justify-center content-center' />;
 
   return (
-    <>
+    <div className='h-screen w-full'>
       <Graphin 
+        className='h-full w-full'
         options={options} 
         onReady={({ graph }) => {
           graphRef.current = graph;
@@ -213,7 +214,7 @@ function GraphVis() {
         }}
         spaceName={spaceName as string}
       />
-    </>
+    </div>
   );
 }
 

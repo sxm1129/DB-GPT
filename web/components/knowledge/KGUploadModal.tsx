@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Modal, Upload, Form, Input, Button, Progress, message, Space, List, Tag, Table, Radio, AutoComplete, Divider } from 'antd';
+import { Modal, Upload, Form, Input, Button, Progress, message, Space, List, Tag, Table, Radio, AutoComplete, Divider, Select, Collapse } from 'antd';
 import { InboxOutlined, LoadingOutlined, CheckCircleOutlined, SyncOutlined, CloseCircleOutlined, PlusOutlined } from '@ant-design/icons';
 import type { UploadFile } from 'antd/es/upload/interface';
-import { uploadKGFiles, getKGTasks, getGraphSpaces, KGTaskResponse } from '@/client/api/knowledge';
+import { uploadKGFiles, getKGTasks, getGraphSpaces, getPromptTemplates, KGTaskResponse, PromptTemplate, TemplateVariable } from '@/client/api/knowledge';
+import { apiInterceptors } from '@/client/api';
 
 const { Dragger } = Upload;
+const { Option } = Select;
+const { Panel } = Collapse;
 
 interface KGUploadModalProps {
   visible: boolean;
@@ -32,6 +35,9 @@ const KGUploadModal: React.FC<KGUploadModalProps> = ({ visible, onCancel, onSucc
   }>({ subjectColumn: '', predicate: '', objectColumn: '' });
   const [graphSpaces, setGraphSpaces] = useState<string[]>([]);
   const [loadingSpaces, setLoadingSpaces] = useState(false);
+  const [templates, setTemplates] = useState<PromptTemplate[]>([]);
+  const [selectedTemplate, setSelectedTemplate] = useState<PromptTemplate | null>(null);
+  const [variableValues, setVariableValues] = useState<Record<string, string>>({});
   
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -39,11 +45,55 @@ const KGUploadModal: React.FC<KGUploadModalProps> = ({ visible, onCancel, onSucc
     if (visible) {
       fetchHistory();
       fetchGraphSpaces();
+      fetchTemplates();
     }
     return () => {
       if (wsRef.current) wsRef.current.close();
     };
   }, [visible]);
+
+  const fetchTemplates = async () => {
+    try {
+      const response = await getPromptTemplates({ include_system: true });
+      // 后端API直接返回数据，不用apiInterceptors包装
+      const data = response?.data as any;
+      if (data && data.templates) {
+        setTemplates(data.templates);
+        if (data.templates.length > 0) {
+          const firstTemplate = data.templates[0];
+          setSelectedTemplate(firstTemplate);
+          const defaults: Record<string, string> = {};
+          firstTemplate.variables?.forEach((v: TemplateVariable) => {
+            if (v.default) defaults[v.name] = v.default;
+          });
+          setVariableValues(defaults);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to fetch templates', e);
+    }
+  };
+
+  const handleTemplateChange = (templateId: number) => {
+    const template = templates.find(t => t.id === templateId);
+    if (template) {
+      setSelectedTemplate(template);
+      const defaults: Record<string, string> = {};
+      template.variables?.forEach((v: TemplateVariable) => {
+        if (v.default) defaults[v.name] = v.default;
+      });
+      setVariableValues(defaults);
+    }
+  };
+
+  const getFinalPrompt = () => {
+    if (!selectedTemplate) return '';
+    let prompt = selectedTemplate.prompt_content;
+    Object.entries(variableValues).forEach(([key, value]) => {
+      prompt = prompt.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
+    });
+    return prompt;
+  };
 
   const fetchGraphSpaces = async () => {
     setLoadingSpaces(true);
@@ -86,8 +136,10 @@ const KGUploadModal: React.FC<KGUploadModalProps> = ({ visible, onCancel, onSucc
     });
     formData.append('graph_space_name', values.graph_space_name);
     formData.append('excel_mode', values.excel_mode);
-    if (values.custom_prompt) {
-      formData.append('custom_prompt', values.custom_prompt);
+    // 使用模板生成的 prompt
+    const finalPrompt = getFinalPrompt();
+    if (finalPrompt) {
+      formData.append('custom_prompt', finalPrompt);
     }
 
     try {
@@ -219,8 +271,59 @@ const KGUploadModal: React.FC<KGUploadModalProps> = ({ visible, onCancel, onSucc
             </div>
           )}
 
-          <Form.Item name="custom_prompt" label="Custom Extraction Prompt (Optional)">
-            <Input.TextArea placeholder="Default: Extract entities and relations as triplets..." rows={3} />
+          <Form.Item label="提取模板">
+            <Select 
+              value={selectedTemplate?.id}
+              onChange={handleTemplateChange}
+              style={{ marginBottom: 12 }}
+            >
+              {templates.map(t => (
+                <Option key={t.id} value={t.id}>
+                  {t.is_system && '🔧 '}{t.name}
+                </Option>
+              ))}
+            </Select>
+            
+            {selectedTemplate && selectedTemplate.variables && selectedTemplate.variables.length > 0 && (
+              <Collapse size="small" style={{ marginBottom: 12 }}>
+                <Panel header="模板变量配置" key="1">
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                    {selectedTemplate.variables.map((v: TemplateVariable) => (
+                      <div key={v.name} style={{ flex: '1 1 45%' }}>
+                        <label style={{ fontSize: 12, color: '#666' }}>{v.description || v.name}</label>
+                        {v.type === 'select' ? (
+                          <Select
+                            size="small"
+                            value={variableValues[v.name]}
+                            onChange={(val) => setVariableValues({...variableValues, [v.name]: val})}
+                            style={{ width: '100%' }}
+                          >
+                            {v.options?.map(opt => (
+                              <Option key={opt} value={opt}>{opt}</Option>
+                            ))}
+                          </Select>
+                        ) : (
+                          <Input
+                            size="small"
+                            value={variableValues[v.name]}
+                            onChange={(e) => setVariableValues({...variableValues, [v.name]: e.target.value})}
+                            placeholder={v.default}
+                          />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </Panel>
+              </Collapse>
+            )}
+            
+            <Input.TextArea 
+              value={getFinalPrompt()}
+              rows={3}
+              readOnly
+              style={{ background: '#f9f9f9', fontSize: 12 }}
+              placeholder="最终提示词预览..."
+            />
           </Form.Item>
 
           <Form.Item label="Files">

@@ -64,12 +64,24 @@ class KGExtractionOperator(MapOperator[List[Document], List[Tuple[str, str, str]
 
     async def map(self, documents: List[Document]) -> List[Tuple[str, str, str]]:
         if not documents:
+            logger.warning("KGExtractionOperator received empty documents list!")
             return []
+        
+        # 日志输出接收到的文档数量和内容长度
+        logger.info(f"KGExtractionOperator received {len(documents)} documents")
+        for i, doc in enumerate(documents):
+            logger.info(f"  Doc[{i}] content length: {len(doc.content) if doc.content else 0} chars")
             
         # 构建文本内容进行处理
         # 简单处理：将所有 Document 的 content 拼接
         # 实际生产中建议针对大文本进行 Batch 处理以避免超过 LLM 上下文限制
-        full_text_content = "\n\n".join([doc.content for doc in documents])
+        full_text_content = "\n\n".join([doc.content for doc in documents if doc.content])
+        
+        if not full_text_content:
+            logger.warning("All documents have empty content, skipping extraction")
+            return []
+            
+        logger.info(f"Total text content length: {len(full_text_content)} chars")
         
         # 如果文本过长，截断（示例中简单截断）
         if len(full_text_content) > 10000:
@@ -83,12 +95,19 @@ class KGExtractionOperator(MapOperator[List[Document], List[Tuple[str, str, str]
 """
         user_prompt = f"请提取以下文本中的三元组关系：\n\n{full_text_content}"
         
+        logger.info(f"Sending to LLM - system_prompt length: {len(system_prompt)}, user_prompt length: {len(user_prompt)}")
+        
         messages = [
             ModelMessage(role="system", content=system_prompt),
-            ModelMessage(role="user", content=user_prompt)
+            ModelMessage(role="human", content=user_prompt)  # 必须使用 'human' 而非 'user'
         ]
         
         request = ModelRequest(model=self._model_name, messages=messages)
+        
+        # 详细日志：打印所有消息的角色和内容长度
+        logger.info(f"ModelRequest messages count: {len(messages)}")
+        for i, msg in enumerate(messages):
+            logger.info(f"  Message[{i}] role={msg.role}, content_len={len(msg.content) if msg.content else 0}")
         
         # 调用 LLM (generate_stream 返回异步生成器，不需要 await)
         response = self._llm_client.generate_stream(request)
@@ -109,7 +128,15 @@ class KGExtractionOperator(MapOperator[List[Document], List[Tuple[str, str, str]
                 clean_text = clean_text.split("```")[1].split("```")[0]
             
             clean_text = clean_text.strip()
-            data = json.loads(clean_text)
+            
+            # 使用 raw_decode 尝试解析第一个合法的 JSON 对象，忽略由于流式拼接可能导致的后续重复内容
+            try:
+                data, _ = json.JSONDecoder().raw_decode(clean_text)
+            except json.JSONDecodeError:
+                # 如果 raw_decode 失败（例如开头不是合法 JSON），尝试直接 loads
+                # 或者如果有其他干扰字符，这里作为兜底
+                data = json.loads(clean_text)
+
             if isinstance(data, list):
                 for item in data:
                     if isinstance(item, list) and len(item) == 3:
@@ -231,3 +258,199 @@ class ExcelMappingOperator(MapOperator[KGTaskContext, List[Tuple[str, str, str]]
         await self.current_dag_context.save_to_share_data("kg_graph_space", ctx.graph_space)
         
         return triplets
+
+
+# ============ 向量存储相关 Operators ============
+
+class ChunkingOperator(MapOperator[List[Document], List["Chunk"]]):
+    """文档切片 Operator - 将文档切分成小块以便向量化和存储"""
+    
+    def __init__(self, chunk_size: int = 512, chunk_overlap: int = 50, **kwargs):
+        super().__init__(**kwargs)
+        self.chunk_size = chunk_size
+        self.chunk_overlap = chunk_overlap
+    
+    async def map(self, documents: List[Document]) -> List["Chunk"]:
+        """将文档切片
+        
+        Args:
+            documents: 文档列表
+            
+        Returns:
+            切片列表
+        """
+        from dbgpt.core import Chunk
+        from dbgpt.rag.text_splitter import CharacterTextSplitter
+        
+        if not documents:
+            logger.warning("ChunkingOperator received empty documents")
+            return []
+        
+        logger.info(f"ChunkingOperator processing {len(documents)} documents")
+        
+        chunks = []
+        text_splitter = CharacterTextSplitter(
+            separator="\n\n",
+            chunk_size=self.chunk_size,
+            chunk_overlap=self.chunk_overlap
+        )
+        
+        for doc in documents:
+            if not doc.content:
+                continue
+            
+            # 使用 text_splitter 进行切片
+            text_chunks = text_splitter.split_text(doc.content)
+            
+            # 转换为 Chunk 对象
+            for i, text_chunk in enumerate(text_chunks):
+                chunk = Chunk(
+                    content=text_chunk,
+                    metadata={
+                        "source": doc.metadata.get("source", "unknown") if doc.metadata else "unknown",
+                        "chunk_index": i,
+                        "doc_name": doc.metadata.get("file_name", "unknown") if doc.metadata else "unknown",
+                    }
+                )
+                chunks.append(chunk)
+        
+        logger.info(f"ChunkingOperator generated {len(chunks)} chunks from {len(documents)} documents")
+        return chunks
+
+
+class EmbeddingOperator(MapOperator[List["Chunk"], List["Chunk"]]):
+    """向量化 Operator - 为文档切片生成向量表示"""
+    
+    def __init__(self, embedding_model_name: Optional[str] = None, **kwargs):
+        super().__init__(**kwargs)
+        self.embedding_model_name = embedding_model_name
+        self._embedding_model = None
+    
+    async def map(self, chunks: List["Chunk"]) -> List["Chunk"]:
+        """为切片生成 embedding
+        
+        Args:
+            chunks: 切片列表
+            
+        Returns:
+            带有 embedding 的切片列表
+        """
+        from dbgpt.rag.embedding import EmbeddingFactory
+        
+        if not chunks:
+            logger.warning("EmbeddingOperator received empty chunks")
+            return []
+        
+        logger.info(f"EmbeddingOperator processing {len(chunks)} chunks")
+        
+        # 延迟加载 embedding 模型
+        if self._embedding_model is None:
+            self._embedding_model = EmbeddingFactory.get_instance(
+                self.system_app
+            ).create(model_name=self.embedding_model_name)
+            logger.info(f"Loaded embedding model: {self.embedding_model_name or 'default'}")
+        
+        # 批量生成 embeddings
+        texts = [chunk.content for chunk in chunks]
+        
+        try:
+            # 调用 embedding 模型
+            embeddings = await self._embedding_model.aembed_documents(texts)
+            
+            # 将 embeddings 添加到 chunks
+            for chunk, embedding in zip(chunks, embeddings):
+                chunk.embeddings = embedding
+            
+            logger.info(f"EmbeddingOperator generated embeddings for {len(chunks)} chunks")
+        except Exception as e:
+            logger.error(f"EmbeddingOperator failed: {str(e)}")
+            raise
+        
+        return chunks
+
+
+class VectorStoreOperator(MapOperator[List["Chunk"], int]):
+    """向量存储 Operator - 将向量化的切片存储到向量数据库"""
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._storage_connector = None
+    
+    async def map(self, chunks: List["Chunk"]) -> int:
+        """存储切片到向量数据库
+        
+        Args:
+            chunks: 带有 embedding 的切片列表
+            
+        Returns:
+            存储的切片数量
+        """
+        from dbgpt_serve.rag.storage_manager import StorageManager
+        from dbgpt_serve.rag.models.models import KnowledgeSpaceDao, KnowledgeSpaceEntity
+        from dbgpt_serve.rag.models.chunk_db import DocumentChunkDao, DocumentChunkEntity
+        from datetime import datetime
+        
+        if not chunks:
+            logger.warning("VectorStoreOperator received empty chunks")
+            return 0
+        
+        logger.info(f"VectorStoreOperator storing {len(chunks)} chunks")
+        
+        # 从 DAG Context 获取 graph_space 名称
+        graph_space = await self.current_dag_context.get_from_share_data("kg_graph_space")
+        if not graph_space:
+            logger.error("VectorStoreOperator: graph_space not found in context")
+            return 0
+        
+        # 获取知识库空间信息
+        space_dao = KnowledgeSpaceDao()
+        spaces = space_dao.get_knowledge_space(KnowledgeSpaceEntity(name=graph_space))
+        
+        if not spaces:
+            logger.error(f"VectorStoreOperator: Knowledge space '{graph_space}' not found")
+            return 0
+        
+        space = spaces[0]
+        
+        # 获取存储连接器
+        storage_manager = StorageManager.get_instance(self.system_app)
+        storage_connector = storage_manager.get_storage_connector(
+            space.name,
+            space.vector_type
+        )
+        
+        try:
+            # 批量存储到向量数据库
+            vector_ids = await storage_connector.aload_document(chunks)
+            
+            # 保存 chunk 详情到数据库（用于后续查询和管理）
+            chunk_dao = DocumentChunkDao()
+            chunk_entities = []
+            
+            # 获取 document_id（从第一个 chunk 的 metadata 中获取）
+            # 注意：这里需要在 FileParsingOperator 或之前的步骤中设置 document_id
+            doc_id = chunks[0].metadata.get("document_id") if chunks[0].metadata else None
+            doc_name = chunks[0].metadata.get("doc_name", "unknown") if chunks[0].metadata else "unknown"
+            
+            for chunk in chunks:
+                chunk_entity = DocumentChunkEntity(
+                    doc_name=doc_name,
+                    doc_type="DOCUMENT",
+                    document_id=doc_id,
+                    content=chunk.content,
+                    meta_info=str(chunk.metadata),
+                    gmt_created=datetime.now(),
+                    gmt_modified=datetime.now(),
+                )
+                chunk_entities.append(chunk_entity)
+            
+            if chunk_entities:
+                chunk_dao.create_documents_chunks(chunk_entities)
+                logger.info(f"VectorStoreOperator saved {len(chunk_entities)} chunk entities to DB")
+            
+            logger.info(f"VectorStoreOperator successfully stored {len(vector_ids)} vectors")
+            return len(vector_ids)
+            
+        except Exception as e:
+            logger.error(f"VectorStoreOperator failed to store chunks: {str(e)}")
+            raise

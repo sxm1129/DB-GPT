@@ -198,6 +198,14 @@ const KGUploadPage: React.FC = () => {
     };
   }, [statusFilter]);
 
+  useEffect(() => {
+    if (router.query.space_name) {
+      const name = router.query.space_name as string;
+      setSelectedSpace(name);
+      form.setFieldValue('graph_space_name', name);
+    }
+  }, [router.query.space_name, form]);
+
   const fetchGraphSpaces = async () => {
     setLoadingSpaces(true);
     try {
@@ -291,7 +299,7 @@ const KGUploadPage: React.FC = () => {
 
     const isHttps = window.location.protocol === 'https:';
     const host = window.location.host;
-    const wsUrl = `${isHttps ? 'wss' : 'ws'}://${host}/api/v2/serve/knowledge_graph/ws/${tid}`;
+    const wsUrl = `${isHttps ? 'wss' : 'ws'}://${host}/api/v2/serve/knowledge_graph/ws/task/${tid}`;
     
     console.log(`Connecting to WS: ${wsUrl} (attempt ${retryCount + 1})`);
     const ws = new WebSocket(wsUrl);

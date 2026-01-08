@@ -1,5 +1,5 @@
 import { AddYuqueProps, RecallTestChunk, RecallTestProps, SearchDocumentParams } from '@/types/knowledge';
-import { GET, POST } from '../index';
+import { GET, POST, DELETE, PUT } from '../index';
 
 /**
  * 知识库编辑搜索
@@ -124,3 +124,72 @@ export const deleteKGTask = (taskId: string) => {
   return DELETE<any, any>(`/api/v2/serve/knowledge_graph/tasks/${taskId}`);
 };
 
+/**
+ * 提示词模板管理 APIs
+ */
+
+export interface TemplateVariable {
+  name: string;
+  type: 'text' | 'select';
+  options?: string[];
+  default?: string;
+  description?: string;
+}
+
+export interface PromptTemplate {
+  id: number;
+  name: string;
+  description?: string;
+  prompt_content: string;
+  variables: TemplateVariable[];
+  is_system: boolean;
+  user_id?: string;
+  gmt_created?: string;
+  gmt_modified?: string;
+}
+
+export interface TemplateListResponse {
+  templates: PromptTemplate[];
+  total: number;
+}
+
+// 获取模板列表
+export const getPromptTemplates = (params?: { user_id?: string; include_system?: boolean }) => {
+  return GET<any, TemplateListResponse>('/api/v2/serve/knowledge_graph/templates', params);
+};
+
+// 获取单个模板
+export const getPromptTemplate = (templateId: number) => {
+  return GET<any, PromptTemplate>(`/api/v2/serve/knowledge_graph/templates/${templateId}`);
+};
+
+// 创建模板
+export const createPromptTemplate = (data: {
+  name: string;
+  description?: string;
+  prompt_content: string;
+  variables?: TemplateVariable[];
+}, userId: string) => {
+  return POST<any, PromptTemplate>(
+    `/api/v2/serve/knowledge_graph/templates?user_id=${userId}`,
+    data
+  );
+};
+
+// 更新模板
+export const updatePromptTemplate = (templateId: number, data: {
+  name: string;
+  description?: string;
+  prompt_content: string;
+  variables?: TemplateVariable[];
+}, userId: string) => {
+  return PUT<any, PromptTemplate>(
+    `/api/v2/serve/knowledge_graph/templates/${templateId}?user_id=${userId}`,
+    data
+  );
+};
+
+// 删除模板
+export const deletePromptTemplate = (templateId: number, userId: string) => {
+  return DELETE<any, any>(`/api/v2/serve/knowledge_graph/templates/${templateId}?user_id=${userId}`);
+};

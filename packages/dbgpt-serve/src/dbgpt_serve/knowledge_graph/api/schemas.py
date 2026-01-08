@@ -61,3 +61,94 @@ class KGUploadTaskListResponse(BaseModel):
     tasks: List[KGUploadTaskResponse] = Field(..., description="Task list")
     total: int = Field(..., description="Total count")
     page: int = Field(..., description="Current page")
+
+
+# ============ Prompt Template Schemas ============
+
+class TemplateVariableVO(BaseModel):
+    """模板变量定义"""
+    name: str = Field(..., description="变量名称，如 'language'")
+    type: str = Field("text", description="变量类型: 'text' 或 'select'")
+    options: Optional[List[str]] = Field(None, description="select 类型时的可选项列表")
+    default: Optional[str] = Field(None, description="默认值")
+    description: Optional[str] = Field(None, description="变量描述")
+
+
+class KGPromptTemplateCreateRequest(BaseModel):
+    """创建/更新模板请求"""
+    name: str = Field(..., description="模板名称，需唯一")
+    description: Optional[str] = Field(None, description="模板描述")
+    prompt_content: str = Field(..., description="提示词内容，支持变量占位符如 {domain}")
+    variables: Optional[List[TemplateVariableVO]] = Field(None, description="变量定义列表")
+
+
+class KGPromptTemplateResponse(BaseModel):
+    """模板响应"""
+    id: int = Field(..., description="模板ID")
+    name: str = Field(..., description="模板名称")
+    description: Optional[str] = Field(None, description="模板描述")
+    prompt_content: str = Field(..., description="提示词内容")
+    variables: List[TemplateVariableVO] = Field([], description="变量定义列表")
+    is_system: bool = Field(False, description="是否为系统预置模板")
+    user_id: Optional[str] = Field(None, description="创建用户ID")
+    gmt_created: Optional[str] = Field(None, description="创建时间")
+    gmt_modified: Optional[str] = Field(None, description="修改时间")
+
+
+class KGPromptTemplateListResponse(BaseModel):
+    """模板列表响应"""
+    templates: List[KGPromptTemplateResponse] = Field(..., description="模板列表")
+    total: int = Field(..., description="总数")
+
+
+# ============ Smart KG Builder Schemas ============
+
+class KGBuildUploadRequest(BaseModel):
+    """智能图谱构建 - 上传请求"""
+    space_name: str = Field(..., description="目标知识库空间名称")
+    chunk_size: int = Field(500, description="切片大小 (tokens)")
+    chunk_overlap: int = Field(50, description="切片重叠 (tokens)")
+
+
+class KGBuildExtractRequest(BaseModel):
+    """智能图谱构建 - 三元组提取请求"""
+    task_id: str = Field(..., description="任务ID")
+    template_id: Optional[int] = Field(None, description="使用的模板ID")
+    custom_prompt: Optional[str] = Field(None, description="自定义提示词（优先于模板）")
+    variable_values: Optional[Dict[str, str]] = Field(None, description="模板变量值")
+    preview_limit: int = Field(50, description="预览显示的最大三元组数量")
+
+
+class TripletVO(BaseModel):
+    """三元组值对象"""
+    subject: str = Field(..., description="主体实体")
+    predicate: str = Field(..., description="关系")
+    object: str = Field(..., description="客体实体")
+    source_chunk: Optional[str] = Field(None, description="来源文本片段")
+
+
+class KGBuildExtractResponse(BaseModel):
+    """智能图谱构建 - 三元组提取预览响应"""
+    task_id: str = Field(..., description="任务ID")
+    triplets: List[TripletVO] = Field([], description="提取的三元组（预览）")
+    total_triplets: int = Field(0, description="三元组总数")
+    preview_limit: int = Field(50, description="预览限制")
+    chunks_processed: int = Field(0, description="已处理的切片数")
+    total_chunks: int = Field(0, description="总切片数")
+
+
+class KGBuildConfirmRequest(BaseModel):
+    """智能图谱构建 - 确认写入请求"""
+    task_id: str = Field(..., description="任务ID")
+    
+
+class KGBuildStatusResponse(BaseModel):
+    """智能图谱构建 - 任务状态响应"""
+    task_id: str = Field(..., description="任务ID")
+    status: str = Field(..., description="任务状态: pending, parsing, chunking, extracting, previewing, confirming, completed, failed")
+    progress: float = Field(0.0, description="总体进度 (0-100)")
+    current_step: str = Field("", description="当前步骤描述")
+    files: List[FileInfoVO] = Field([], description="文件列表")
+    triplets_count: int = Field(0, description="已提取三元组数")
+    error_message: Optional[str] = Field(None, description="错误信息")
+

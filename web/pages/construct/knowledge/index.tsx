@@ -196,6 +196,22 @@ const Knowledge = () => {
                   <InnerDropdown
                     menu={{
                       items: [
+                        ...(space.vector_type === 'KnowledgeGraph'
+                          ? [
+                              {
+                                key: 'build',
+                                label: (
+                                  <span
+                                    onClick={() => {
+                                      router.push(`/construct/knowledge/upload?space_name=${space.name}`);
+                                    }}
+                                  >
+                                    {t('Build Knowledge Graph')}
+                                  </span>
+                                ),
+                              },
+                            ]
+                          : []),
                         {
                           key: 'del',
                           label: (

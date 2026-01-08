@@ -34,7 +34,7 @@ function UserBar({ onlyAvatar = false }) {
             {userInfo?.nick_name}
           </Avatar>
           <span
-            className={cls('text-sm', {
+            className={cls('text-sm font-medium font-heading tracking-wide text-slate-700 dark:text-slate-100', {
               hidden: onlyAvatar,
             })}
           >

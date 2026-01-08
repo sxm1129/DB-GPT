@@ -93,6 +93,11 @@ function LayoutWrapper({ children }: { children: React.ReactNode }) {
     if (router.pathname.includes('mobile')) {
       return <>{children}</>;
     }
+    
+    // For graph visualization page, use h-full instead of overflow-y-auto
+    const isGraphPage = /\/knowledge\/graph/.test(router.pathname);
+
+    
     return (
       <div className='flex w-screen h-screen overflow-hidden'>
         <Head>
@@ -103,7 +108,9 @@ function LayoutWrapper({ children }: { children: React.ReactNode }) {
             <SideBar />
           </div>
         )}
-        <div className='flex flex-col flex-1 relative overflow-y-auto'>{children}</div>
+        <div className={classNames('flex flex-col flex-1 relative', isGraphPage ? 'h-full overflow-hidden' : 'overflow-y-auto')}>
+          {children}
+        </div>
         <FloatHelper />
       </div>
     );

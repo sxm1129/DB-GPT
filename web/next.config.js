@@ -23,6 +23,26 @@ const nextConfig = {
   trailingSlash: true,
   images: { unoptimized: true },
   skipTrailingSlashRedirect: true,
+  async rewrites() {
+    return [
+      {
+        source: "/api/:path*/",
+        destination: "http://127.0.0.1:5670/api/:path*",
+      },
+      {
+        source: "/api/:path*",
+        destination: "http://127.0.0.1:5670/api/:path*",
+      },
+      {
+        source: "/proxy_api/:path*/",
+        destination: "http://127.0.0.1:5670/:path*",
+      },
+      {
+        source: "/proxy_api/:path*",
+        destination: "http://127.0.0.1:5670/:path*",
+      },
+    ];
+  },
   webpack: (config, { isServer }) => {
     config.resolve.fallback = { fs: false };
     if (!isServer) {

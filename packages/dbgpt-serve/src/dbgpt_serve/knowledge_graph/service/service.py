@@ -8,8 +8,13 @@ from typing import List, Optional, Dict, Any
 from fastapi import UploadFile, BackgroundTasks
 from dbgpt.component import BaseComponent, SystemApp, ComponentType
 from dbgpt.storage.metadata import DatabaseManager
+from dbgpt.rag.knowledge.base import KnowledgeType
 from dbgpt_serve.core import BaseServeConfig
 from dbgpt_serve.datasource.manages import ConnectorManager
+from dbgpt_serve.rag.models.document_db import KnowledgeDocumentDao, KnowledgeDocumentEntity
+from dbgpt_serve.rag.models.models import KnowledgeSpaceDao, KnowledgeSpaceEntity
+from dbgpt_serve.rag.models.chunk_db import DocumentChunkDao, DocumentChunkEntity
+from dbgpt_serve.rag.service.service import SyncStatus
 from dbgpt_ext.datasource.conn_tugraph import TuGraphConnector
 
 from .ws_manager import ws_manager
@@ -50,6 +55,9 @@ class Service(BaseComponent):
         # 初始化 DAO
         self.task_dao = KGUploadTaskDao()
         self.file_dao = KGUploadFileDao()
+        self.document_dao = KnowledgeDocumentDao()
+        self.space_dao = KnowledgeSpaceDao()
+        self.chunk_dao = DocumentChunkDao()
         
         # 获取 ConnectorManager
         self._connector_manager: ConnectorManager = self._system_app.get_component(
@@ -77,6 +85,15 @@ class Service(BaseComponent):
                 logger.warning("xSmartKG: No TuGraph datasource found in system configuration.")
         except Exception as e:
             logger.error(f"Failed to init TuGraph connector: {str(e)}")
+
+    def _get_or_create_space(self, space_name: str) -> Optional[KnowledgeSpaceEntity]:
+        """获取或创建知识库空间，确保 KnowledgeGraph 类型的文档可以关联到对应空间"""
+        spaces = self.space_dao.get_knowledge_space(KnowledgeSpaceEntity(name=space_name))
+        if spaces:
+            return spaces[0]
+        # 如果空间不存在，不自动创建（用户应该先在知识库页面创建）
+        logger.warning(f"Knowledge space '{space_name}' not found. Documents will be created without space association.")
+        return None
 
     def _get_worker_dag(self):
         if not hasattr(self, "_kg_dag") or self._kg_dag is None:
@@ -145,7 +162,11 @@ class Service(BaseComponent):
         )
         self.task_dao.create_task(task_entity)
 
-        # 3. 创建文件详情实体
+        # 3. 创建文件详情实体 + 创建对应的 KnowledgeDocumentEntity
+        # 获取或查找对应的知识库空间
+        space = self._get_or_create_space(request.graph_space_name)
+        doc_id_map = {}  # 用于存储文件名到文档ID的映射
+        
         for f in saved_files:
             file_entity = KGUploadFileEntity(
                 task_id=task_id,
@@ -157,8 +178,40 @@ class Service(BaseComponent):
                 gmt_created=datetime.now()
             )
             self.file_dao.create_file_detail(file_entity)
+            
+            # 同时创建 KnowledgeDocumentEntity，使其与标准知识库系统集成
+            if space:
+                # 检查是否已存在同名文档
+                existing_docs = self.document_dao.get_knowledge_documents(
+                    KnowledgeDocumentEntity(doc_name=f["name"], space=space.name)
+                )
+                if existing_docs:
+                    # 如果已存在，更新状态为 RUNNING
+                    doc = existing_docs[0]
+                    doc.status = SyncStatus.RUNNING.name
+                    doc.last_sync = datetime.now()
+                    doc.content = f["path"]
+                    self.document_dao.update_knowledge_document(doc)
+                    doc_id_map[f["name"]] = doc.id
+                    logger.info(f"Updated existing document: {f['name']} (id={doc.id})")
+                else:
+                    # 创建新文档
+                    doc_type = KnowledgeType.DOCUMENT.value
+                    doc_entity = KnowledgeDocumentEntity(
+                        doc_name=f["name"],
+                        doc_type=doc_type,
+                        space=space.name,
+                        chunk_size=0,  # 初始化为 0，处理完成后更新
+                        status=SyncStatus.RUNNING.name,
+                        last_sync=datetime.now(),
+                        content=f["path"],
+                        result="",
+                    )
+                    doc_id = self.document_dao.create_knowledge_document(doc_entity)
+                    doc_id_map[f["name"]] = doc_id
+                    logger.info(f"Created new document: {f['name']} (id={doc_id})")
 
-        # 4. 异步启动处理流程
+        # 4. 异步启动处理流程，传入 doc_id_map 以便后续更新
         asyncio.create_task(
             self._run_task_real(
                 task_id, 
@@ -166,7 +219,8 @@ class Service(BaseComponent):
                 request.excel_mode,
                 [f["path"] for f in saved_files],
                 request.custom_prompt,
-                request.column_mapping
+                request.column_mapping,
+                doc_id_map  # 新增参数
             )
         )
 
@@ -192,43 +246,28 @@ class Service(BaseComponent):
         return {"success": True}
 
     async def list_graph_spaces(self):
-        """获取可用的图空间列表"""
+        """获取可用的图空间列表 - 返回存储类型为 Knowledge Graph 的知识库"""
         spaces = []
         try:
-            if self._tugraph_connector:
-                # 尝试从 TuGraph 获取图空间列表
-                try:
-                    # 使用管理会话 (default 数据库) 来获取所有图列表
-                    with self._tugraph_connector._driver.session(database="default") as session:
-                        result = session.run("CALL dbms.graph.listGraphs()").data()
-                        if result:
-                            spaces = [row["graph_name"] for row in result if "graph_name" in row]
-                            logger.info(f"xSmartKG: Listed graphs from TuGraph (dbms): {spaces}")
-                except Exception as e:
-                    logger.warning(f"xSmartKG: Failed to list graphs from TuGraph via CALL dbms.graph.listGraphs(): {str(e)}")
-                    # 尝试备选命令
-                    try:
-                        result = self._tugraph_connector.run("CALL db.listGraphs()")
-                        if result:
-                            spaces = [row[0] for row in result if row]
-                            logger.info(f"xSmartKG: Listed graphs from TuGraph (db): {spaces}")
-                    except Exception as e2:
-                        logger.warning(f"xSmartKG: Failed to list graphs from TuGraph via CALL db.listGraphs(): {str(e2)}")
-                        # 回退：返回默认空间
-                        spaces = ["default"]
-            else:
-                # 没有 TuGraph 连接时，从历史任务中获取已使用的空间
-                tasks, _ = self.task_dao.list_tasks(user_id="", page=1, limit=100)
-                seen = set()
-                for task in tasks:
-                    if task.graph_space_name and task.graph_space_name not in seen:
-                        spaces.append(task.graph_space_name)
-                        seen.add(task.graph_space_name)
-                # 如果还是空，默认给一个
-                if not spaces:
-                    spaces = ["default"]
+            # 从 DB-GPT 知识库系统获取存储类型为 Knowledge Graph 的空间
+            # KnowledgeSpaceEntity 的 vector_type 字段存储存储类型
+            all_spaces = self.space_dao.get_knowledge_space(KnowledgeSpaceEntity())
+            if all_spaces:
+                for space in all_spaces:
+                    # 检查 vector_type 是否包含 'Graph' 或 'Knowledge' 关键词
+                    # 通常 Knowledge Graph 类型的 vector_type 值为 'KnowledgeGraph'
+                    vector_type = getattr(space, 'vector_type', '') or ''
+                    if 'graph' in vector_type.lower() or 'knowledge' in vector_type.lower():
+                        spaces.append(space.name)
+                        logger.info(f"xSmartKG: Found KG space: {space.name} (type={vector_type})")
+            
+            # 如果没有找到 KnowledgeGraph 类型的空间，返回所有空间供选择
+            if not spaces and all_spaces:
+                spaces = [s.name for s in all_spaces]
+                logger.info(f"xSmartKG: No KG-type spaces found, returning all {len(spaces)} spaces")
+                
         except Exception as e:
-            logger.error(f"xSmartKG: Error listing graph spaces: {str(e)}")
+            logger.error(f"xSmartKG: Error listing knowledge spaces: {str(e)}")
         
         # 确保 spaces 是列表且不为空
         if not spaces:
@@ -319,7 +358,7 @@ class Service(BaseComponent):
             file_names=file_vos
         )
 
-    async def _run_task_real(self, task_id: str, graph_space: str, excel_mode: str, file_paths: List[str], custom_prompt: Optional[str], column_mapping=None):
+    async def _run_task_real(self, task_id: str, graph_space: str, excel_mode: str, file_paths: List[str], custom_prompt: Optional[str], column_mapping=None, doc_id_map: Optional[Dict[str, int]] = None):
         """执行真实的 AWEL 任务流程"""
         logger.info(f"Starting real task processing for {task_id}, mode: {excel_mode}")
         try:
@@ -364,22 +403,66 @@ class Service(BaseComponent):
             end_node = leaf_nodes[0] if leaf_nodes else start_node
             dag_ctx = await runner.execute_workflow(end_node, call_data={"data": ctx})
             
-            # 从 DAG Context 获取结果
+            # 从 DAG Context 获取结果（新的并行 DAG 返回聚合结果）
             task_output = dag_ctx.current_task_context.task_output
-            result_count = task_output.output if task_output else 0
+            result = task_output.output if task_output else {}
             
-            await self._update_task_status(task_id, "completed", 100.0, f"提取完成，成功导入 {result_count} 个三元组")
+            # 解析聚合结果
+            if isinstance(result, dict):
+                triplets_count = result.get("triplets_count", 0)
+                vectors_count = result.get("vectors_count", 0)
+            else:
+                # 兼容旧版本（只返回三元组数量）
+                triplets_count = result if isinstance(result, int) else 0
+                vectors_count = 0
+            
+            logger.info(f"Task {task_id} completed: {triplets_count} triplets, {vectors_count} vectors")
+            
+            # 更新关联的 KnowledgeDocumentEntity 的 chunk_size 和状态
+            if doc_id_map:
+                total_files = len(doc_id_map)
+                avg_chunks = max(1, vectors_count // total_files) if total_files > 0 and vectors_count > 0 else 0
+                avg_triplets = max(1, triplets_count // total_files) if total_files > 0 and triplets_count > 0 else 0
+                
+                for file_name, doc_id in doc_id_map.items():
+                    try:
+                        docs = self.document_dao.documents_by_ids([doc_id])
+                        if docs:
+                            doc = docs[0]
+                            doc.chunk_size = avg_chunks
+                            doc.status = SyncStatus.FINISHED.name
+                            doc.result = f"知识图谱处理完成：{avg_triplets} 个三元组，{avg_chunks} 个向量切片"
+                            self.document_dao.update_knowledge_document(doc)
+                            logger.info(f"Updated document {file_name} (id={doc_id}): chunks={avg_chunks}, triplets={avg_triplets}")
+                    except Exception as e:
+                        logger.error(f"Failed to update document {file_name}: {str(e)}")
+            
+            completion_message = f"处理完成！三元组：{triplets_count}，向量切片：{vectors_count}"
+            await self._update_task_status(task_id, "completed", 100.0, completion_message)
             self.task_dao.update_task(task_id, {
                 "status": "completed",
                 "progress": 100.0,
                 "completed_at": datetime.now(),
-                "relations_count": result_count if isinstance(result_count, int) else 0
+                "relations_count": triplets_count,
+                "entities_count": vectors_count
             })
             await self.ws_manager.broadcast(task_id, {"type": "task_completed", "task_id": task_id})
             
         except Exception as e:
             logger.error(f"Task {task_id} failed: {str(e)}")
             await self._update_task_status(task_id, "failed", 1.0, f"处理失败: {str(e)}")
+            # 同时更新关联文档的状态为失败
+            if doc_id_map:
+                for file_name, doc_id in doc_id_map.items():
+                    try:
+                        docs = self.document_dao.documents_by_ids([doc_id])
+                        if docs:
+                            doc = docs[0]
+                            doc.status = SyncStatus.FAILED.name
+                            doc.result = f"知识图谱处理失败: {str(e)}"
+                            self.document_dao.update_knowledge_document(doc)
+                    except Exception as update_error:
+                        logger.error(f"Failed to update document {file_name} status: {str(update_error)}")
 
 
     async def _run_task_mock(self, task_id: str):

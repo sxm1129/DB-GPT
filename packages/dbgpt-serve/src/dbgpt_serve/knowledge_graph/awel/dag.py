@@ -1,12 +1,15 @@
 import logging
-from typing import Optional
-from dbgpt.core.awel import DAG, JoinOperator, BaseOperator, TriggerOperator
+from typing import Optional, List, Any
+from dbgpt.core.awel import DAG, JoinOperator, BaseOperator, TriggerOperator, MapOperator
 from .operators import (
     FileParsingOperator,
     KGExtractionOperator,
     TuGraphImportOperator,
     ExcelMappingOperator,
-    KGTaskContext
+    KGTaskContext,
+    ChunkingOperator,
+    EmbeddingOperator,
+    VectorStoreOperator,
 )
 from dbgpt.component import SystemApp, ComponentType
 from dbgpt.model.cluster import WorkerManagerFactory
@@ -14,8 +17,22 @@ from dbgpt_ext.datasource.conn_tugraph import TuGraphConnector
 
 logger = logging.getLogger(__name__)
 
+class ResultAggregatorOperator(MapOperator[List[Any], dict]):
+    """聚合图谱和向量分支的结果"""
+    
+    async def map(self, results: List[Any]) -> dict:
+        triplets_count = results[0] if len(results) > 0 else 0
+        vectors_count = results[1] if len(results) > 1 else 0
+        result = {
+            "triplets_count": triplets_count,
+            "vectors_count": vectors_count
+        }
+        logger.info(f"Aggregated result: {result}")
+        return result
+
+
 def create_kg_dag(system_app: SystemApp, config: any, connector: TuGraphConnector) -> DAG:
-    """创建并返回知识图谱构建 DAG（LLM 提取模式）"""
+    """创建并返回知识图谱构建 DAG（LLM 提取模式 + 向量存储）"""
     
     with DAG("dbgpt_kg_upload_workflow") as dag:
         # 0. 触发器 Operator - 接收 call_data (KGTaskContext)
@@ -44,8 +61,28 @@ def create_kg_dag(system_app: SystemApp, config: any, connector: TuGraphConnecto
             graph_name="default"  # 初始占位，运行时从上下文获取
         )
         
-        # 串联流: TriggerOperator -> FileParsingOperator -> KGExtractionOperator -> TuGraphImportOperator
-        trigger_task >> parsing_task >> extraction_task >> import_task
+        # === 向量分支 ===
+        chunking_task = ChunkingOperator(chunk_size=512, chunk_overlap=50)
+        embedding_task = EmbeddingOperator(embedding_model_name=getattr(config, 'embedding_model', None))
+        vector_store_task = VectorStoreOperator()
+        
+        # === 结果聚合 ===
+        aggregator_task = ResultAggregatorOperator()
+        
+        # 构建并行流程
+        trigger_task >> parsing_task
+        parsing_task >> extraction_task >> import_task
+        parsing_task >> chunking_task >> embedding_task >> vector_store_task
+        
+        # 合并结果 - JoinOperator 需要 combine_function 来合并两个分支的输出
+        def combine_results(triplet_result, vector_result):
+            """合并图谱分支和向量分支的结果"""
+            return [triplet_result, vector_result]
+        
+        join_task = JoinOperator(combine_function=combine_results)
+        import_task >> join_task
+        vector_store_task >> join_task
+        join_task >> aggregator_task
         
     return dag
 

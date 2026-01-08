@@ -88,6 +88,11 @@ export default function SpaceForm(props: IProps) {
           ]}
         >
           <Input className='h-12' placeholder={t('Please_input_the_name')} />
+          {storage === 'KnowledgeGraph' && (
+            <p className='text-xs text-blue-500 mt-1'>
+              提示：知识库名称将作为 TuGraph 中的图空间名称，建议保持一致。
+            </p>
+          )}
         </Form.Item>
         <Form.Item<FieldType>
           label={t('Storage')}

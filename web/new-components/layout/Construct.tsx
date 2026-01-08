@@ -64,6 +64,16 @@ function ConstructLayout({ children }: { children: React.ReactNode }) {
       ),
       path: '/knowledge/upload',
     },
+    {
+      key: 'smart-kg-builder',
+      name: (
+        <span className="flex items-center gap-1.5">
+          <img src="/xsmartkg_icon.png" style={{ width: 16, height: 16, objectFit: 'contain' }} alt="smart-kg" />
+          <span>智能KG构建</span>
+        </span>
+      ),
+      path: '/smart-kg-builder',
+    },
     // {
     //   key: 'agent',
     //   name: t('Plugins'),
@@ -85,7 +95,9 @@ function ConstructLayout({ children }: { children: React.ReactNode }) {
   ];
   const router = useRouter();
   const activeKey = router.pathname.includes('/construct/knowledge/upload') 
-    ? 'knowledge/upload' 
+    ? 'knowledge/upload'
+    : router.pathname.includes('/construct/smart-kg-builder')
+    ? 'smart-kg-builder' 
     : router.pathname.split('/')[2];
   // const isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches; // unused
 
